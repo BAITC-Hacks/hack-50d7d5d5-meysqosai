@@ -95,9 +95,16 @@ No personal data is stored. A reset may clear demo scenarios without affecting t
 - **Rejected:** geographic mapping dependencies and multi-team architecture during the first slice.
 - **Rollback:** add sourced geography or saved-scenario comparison after the Golden Path is verified.
 
-### 2026-09-23 — Use a schematic district map, not invented GIS geometry
+### 2026-09-23 — Replace the schematic map with sourced Astana geometry
 
-- **Reason:** the user needs spatial context, but the synthetic dataset has no verified boundary geometry.
-- **Decision:** render an accessible abstract SVG with clearly disclosed non-official boundaries; highlight one district for district measures and the whole diagram for city measures.
-- **Rejected:** adding a GIS library, basemap, or geographically precise-looking polygons without a trustworthy source.
-- **Rollback:** replace the SVG with sourced GeoJSON behind the same district IDs if official geometry becomes available.
+- **Reason:** the AquaOps baseline supplied published district GeoJSON and a traceable Astana architecture GIS endpoint, allowing real spatial context without inventing boundaries.
+- **Decision:** use Leaflet with OpenStreetMap tiles and bundle the district GeoJSON locally. Map `baikonyr` to the simulator's `baikonur` and `esil` to `yesil`; keep Saraishyk visible as a muted context-only district because the synthetic fixture models five districts.
+- **Disclosure:** the interface always shows OSM attribution, the geometry source, and a warning that boundary currency has not been verified. The map is contextual, not an official cadastral or administrative product.
+- **Resilience:** if OSM tiles fail, the locally bundled polygons and district selection remain available.
+- **Rollback:** restore a non-geographic diagram if the geometry source or right to redistribute cannot be confirmed before submission.
+
+### 2026-09-23 — Use an original generated Astana hero image
+
+- **Reason:** the landing state must immediately communicate that the simulation is limited to Astana.
+- **Decision:** bundle an original AI-generated blue-hour Astana skyline as a compressed JPG and pair it with a visible `Астана • Казахстан` badge; no remote image host is required.
+- **Rejected:** hotlinking a third-party photograph with unclear competition and redistribution rights.

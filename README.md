@@ -83,9 +83,18 @@ through `POST /api/scenarios/validate`, and calculates valid scenarios through
 `POST /api/scenarios/simulate`. The published example calculates to `56.5431`
 from an exact baseline of `52.5577` (displayed as 56.5 and 52.56).
 
-The Russian-language frontend provides five locally persisted scenario tabs, a
-schematic district map, visible city and district indicators, immediate budget
-feedback, citywide/district impact highlighting, and calculated scenario results.
-The map is intentionally schematic because the demo dataset contains no verified GIS boundaries.
+The Russian-language frontend provides five locally persisted scenario tabs, an
+interactive OpenStreetMap view with published Astana district geometry, visible
+city and district indicators, immediate budget feedback, citywide/district impact
+highlighting, and calculated scenario results. Five mapped districts are connected
+to the synthetic simulator; Saraishyk is retained as geographic context and clearly
+marked as outside the current model. The OSM tiles require an internet connection,
+while the district GeoJSON and the generated Astana hero image are bundled locally.
+
+Map attribution and provenance are displayed in the interface. The geometry was
+adapted from the Astana Aqua Ops baseline and points to the Astana architecture GIS
+service; its publication date, current administrative accuracy, and reuse license
+have not been independently verified, so it must not be presented as official or
+current municipal boundary data.
 
 See [docs/deployment.md](docs/deployment.md) when the organizer's hosting constraints are known.

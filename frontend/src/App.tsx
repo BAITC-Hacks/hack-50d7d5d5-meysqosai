@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import AstanaMap from "./AstanaMap";
+
 type Direction = { id: string; name_ru: string; name_en: string };
 type Indicator = {
   id: string;
@@ -71,13 +73,6 @@ type SimulationResult = Validation & {
 };
 
 const STORAGE_KEY = "meysqosai-scenarios-v1";
-const MAP_SHAPES: Record<string, string> = {
-  saryarka: "42,128 196,70 246,156 202,250 58,240",
-  baikonur: "202,250 246,156 360,150 402,252 314,320",
-  almaty: "58,240 202,250 314,320 266,390 72,366 24,292",
-  yesil: "360,150 522,116 580,210 522,318 402,252",
-  nura: "196,70 288,18 506,34 522,116 360,150 246,156",
-};
 
 function defaultScenarios(): Scenario[] {
   return Array.from({ length: 5 }, (_, index) => ({
@@ -125,83 +120,6 @@ function scoreByDirection(catalog: Catalog, directionId: string): number {
 
 function signed(value: number): string {
   return `${value > 0 ? "+" : ""}${value}`;
-}
-
-function CityMap({
-  catalog,
-  selectedDistrictId,
-  onSelectDistrict,
-  decisions,
-}: {
-  catalog: Catalog;
-  selectedDistrictId: string;
-  onSelectDistrict: (id: string) => void;
-  decisions: Decision[];
-}) {
-  const initiatives = new Map(catalog.initiatives.map((item) => [item.id, item]));
-  const impactCounts = decisions.reduce<Record<string, number>>((counts, decision) => {
-    if (decision.district_id) counts[decision.district_id] = (counts[decision.district_id] ?? 0) + 1;
-    return counts;
-  }, {});
-  const citywideCount = decisions.filter(
-    (decision) => initiatives.get(decision.initiative_id)?.scope === "city",
-  ).length;
-
-  return (
-    <div className={`map-shell ${citywideCount ? "citywide-active" : ""}`}>
-      <div className="map-caption">
-        <span>Схематическая карта районов</span>
-        <small>Неофициальные границы • только для демонстрации</small>
-      </div>
-      {citywideCount > 0 && (
-        <div className="citywide-banner">Городских программ выбрано: {citywideCount}</div>
-      )}
-      <svg className="city-map" viewBox="0 0 610 410" role="img" aria-label="Схема пяти районов">
-        {catalog.districts.map((district) => {
-          const selected = district.id === selectedDistrictId;
-          const affected = Boolean(impactCounts[district.id]) || citywideCount > 0;
-          const shape = MAP_SHAPES[district.id];
-          const [labelX, labelY] = {
-            saryarka: [128, 175],
-            baikonur: [302, 235],
-            almaty: [160, 315],
-            yesil: [485, 220],
-            nura: [356, 92],
-          }[district.id] ?? [300, 200];
-          return (
-            <g
-              key={district.id}
-              className={`district-shape ${selected ? "selected" : ""} ${affected ? "affected" : ""}`}
-              role="button"
-              tabIndex={0}
-              aria-label={`Выбрать район ${district.name_ru}`}
-              onClick={() => onSelectDistrict(district.id)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") onSelectDistrict(district.id);
-              }}
-            >
-              <polygon points={shape} />
-              <text x={labelX} y={labelY} textAnchor="middle">
-                {district.name_ru}
-              </text>
-              {impactCounts[district.id] > 0 && (
-                <g className="impact-dot">
-                  <circle cx={labelX} cy={labelY + 25} r="12" />
-                  <text x={labelX} y={labelY + 29} textAnchor="middle">
-                    {impactCounts[district.id]}
-                  </text>
-                </g>
-              )}
-            </g>
-          );
-        })}
-      </svg>
-      <div className="map-legend">
-        <span><i className="legend-swatch selected" /> район для следующего решения</span>
-        <span><i className="legend-swatch affected" /> уже получает эффект</span>
-      </div>
-    </div>
-  );
 }
 
 function BudgetPanel({
@@ -460,6 +378,7 @@ export default function App() {
       <main id="top">
         <section className="hero">
           <div className="hero-copy">
+            <span className="astana-badge">Астана • Казахстан</span>
             <p className="eyebrow">Управленческая симуляция • 5 часов</p>
             <h1>Вы — аким.<br />Город ждёт решений.</h1>
             <p>
@@ -568,11 +487,12 @@ export default function App() {
                   </div>
                   <span className="target-pill">Цель: {selectedDistrict.name_ru}</span>
                 </div>
-                <CityMap
-                  catalog={catalog}
+                <AstanaMap
+                  districts={catalog.districts}
                   selectedDistrictId={selectedDistrictId}
                   onSelectDistrict={setSelectedDistrictId}
                   decisions={activeScenario.decisions}
+                  initiatives={initiatives}
                 />
                 <div className="district-context">
                   <div>

@@ -71,13 +71,23 @@ button:focus-visible, input:focus-visible, [role="button"]:focus-visible {
 
 main { width: min(1500px, calc(100% - 40px)); margin: 0 auto; }
 .hero {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(430px, 0.8fr);
   align-items: center;
   gap: clamp(40px, 8vw, 120px);
   min-height: 650px;
-  padding: 72px clamp(10px, 3vw, 44px);
+  overflow: hidden;
+  margin-top: 24px;
+  padding: 72px clamp(28px, 5vw, 74px);
+  background:
+    linear-gradient(90deg, rgb(5 24 42 / 94%) 0%, rgb(5 24 42 / 80%) 38%, rgb(5 24 42 / 28%) 72%, rgb(5 24 42 / 8%) 100%),
+    url("/images/astana-hero.jpg") center / cover no-repeat;
+  border-radius: 28px;
+  box-shadow: 0 28px 70px rgb(14 42 61 / 20%);
 }
+.hero-copy { position: relative; z-index: 2; }
+.astana-badge { display: inline-flex; margin-bottom: 18px; padding: 7px 11px; color: #d8fff8; background: rgb(0 165 142 / 24%); border: 1px solid rgb(130 230 213 / 42%); border-radius: 999px; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 .eyebrow, .section-kicker {
   margin: 0 0 10px;
   color: var(--teal-dark);
@@ -89,13 +99,14 @@ main { width: min(1500px, calc(100% - 40px)); margin: 0 auto; }
 .hero h1 {
   max-width: 820px;
   margin: 0 0 24px;
-  color: var(--navy);
+  color: white;
   font-family: "Onest", sans-serif;
   font-size: clamp(3.4rem, 7vw, 7rem);
   line-height: 0.92;
   letter-spacing: -0.065em;
 }
-.hero-copy > p:not(.eyebrow) { max-width: 680px; color: #536979; font-size: 1.14rem; line-height: 1.75; }
+.hero .eyebrow { color: #7ce1d1; }
+.hero-copy > p:not(.eyebrow) { max-width: 680px; color: #d4e3e9; font-size: 1.14rem; line-height: 1.75; }
 .hero-actions { display: flex; align-items: center; gap: 24px; margin-top: 34px; }
 .hero-actions button, .add-button {
   padding: 14px 20px;
@@ -106,12 +117,12 @@ main { width: min(1500px, calc(100% - 40px)); margin: 0 auto; }
   font-weight: 800;
   box-shadow: 0 10px 25px rgb(0 124 112 / 20%);
 }
-.hero-actions span { display: grid; color: var(--muted); font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.08em; }
-.hero-actions strong { color: var(--navy); font-size: 1.3rem; letter-spacing: 0; }
+.hero-actions span { display: grid; color: #b8cbd4; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.hero-actions strong { color: white; font-size: 1.3rem; letter-spacing: 0; }
 .hero-metrics {
   position: relative;
   min-height: 480px;
-  background: radial-gradient(circle at center, rgb(208 244 237 / 90%) 0 23%, transparent 24%), radial-gradient(circle at center, transparent 0 48%, rgb(0 165 142 / 12%) 48.5% 49%, transparent 49.5%);
+  background: radial-gradient(circle at center, rgb(208 244 237 / 82%) 0 23%, transparent 24%), radial-gradient(circle at center, transparent 0 48%, rgb(172 235 225 / 34%) 48.5% 49%, transparent 49.5%);
 }
 .hero-core {
   position: absolute;
@@ -122,7 +133,7 @@ main { width: min(1500px, calc(100% - 40px)); margin: 0 auto; }
   aspect-ratio: 1;
   color: white;
   background: var(--navy);
-  border: 9px solid white;
+  border: 9px solid rgb(255 255 255 / 88%);
   border-radius: 50%;
   box-shadow: 0 24px 60px rgb(14 42 61 / 28%);
   transform: translate(-50%, -50%);
@@ -140,8 +151,8 @@ main { width: min(1500px, calc(100% - 40px)); margin: 0 auto; }
   width: 126px;
   min-height: 94px;
   padding: 12px;
-  background: white;
-  border: 1px solid var(--line);
+  background: rgb(255 255 255 / 91%);
+  border: 1px solid rgb(255 255 255 / 72%);
   border-radius: 18px;
   box-shadow: 0 15px 35px rgb(31 64 78 / 10%);
   transform: translate(-50%, -50%);
@@ -234,27 +245,26 @@ main { width: min(1500px, calc(100% - 40px)); margin: 0 auto; }
 .section-heading { display: flex; justify-content: space-between; align-items: start; gap: 18px; margin-bottom: 18px; }
 .section-heading h3 { margin: 0; color: var(--navy); font-family: "Onest", sans-serif; font-size: 1.4rem; }
 .target-pill, .rule-pill { padding: 8px 11px; color: var(--teal-dark); background: var(--mint); border-radius: 999px; font-size: 0.72rem; font-weight: 800; white-space: nowrap; }
-.map-shell { position: relative; overflow: hidden; padding: 14px; background: #eef4f5; border: 1px solid #d8e3e5; border-radius: 16px; transition: box-shadow 180ms ease; }
-.map-shell.citywide-active { box-shadow: inset 0 0 0 3px rgb(0 165 142 / 32%); }
+.osm-map-shell { position: relative; overflow: hidden; padding: 14px; background: #eef4f5; border: 1px solid #d8e3e5; border-radius: 16px; }
 .map-caption { display: flex; justify-content: space-between; gap: 15px; color: var(--navy); font-size: 0.74rem; font-weight: 800; }
 .map-caption small { color: var(--muted); font-weight: 600; }
-.citywide-banner { position: absolute; z-index: 3; top: 46px; right: 14px; padding: 7px 10px; color: white; background: var(--teal-dark); border-radius: 9px; font-size: 0.68rem; font-weight: 800; }
-.city-map { display: block; width: 100%; max-height: 410px; margin: 4px auto; }
-.district-shape { cursor: pointer; }
-.district-shape polygon { fill: #d8e4e6; stroke: white; stroke-width: 5px; transition: fill 160ms ease, filter 160ms ease; }
-.district-shape:nth-child(2n) polygon { fill: #cbdcdf; }
-.district-shape:hover polygon { fill: #b5d8d5; }
-.district-shape.affected polygon { fill: #9bded2; }
-.district-shape.selected polygon { fill: #0f7d75; filter: drop-shadow(0 10px 12px rgb(15 125 117 / 20%)); }
-.district-shape text { pointer-events: none; fill: #345060; font-size: 15px; font-weight: 800; }
-.district-shape.selected > text { fill: white; }
-.impact-dot circle { fill: var(--navy); stroke: white; stroke-width: 2px; }
-.impact-dot text { fill: white; font-size: 11px; }
+.citywide-banner { position: absolute; z-index: 500; top: 46px; right: 14px; padding: 7px 10px; color: white; background: var(--teal-dark); border-radius: 9px; box-shadow: 0 7px 20px rgb(0 75 68 / 22%); font-size: 0.68rem; font-weight: 800; }
+.osm-map-canvas { width: 100%; height: 430px; margin-top: 10px; overflow: hidden; background: #dce7e9; border: 1px solid #cad9dd; border-radius: 12px; isolation: isolate; }
+.osm-map-canvas.failed::before { display: grid; place-items: center; height: 100%; padding: 30px; color: var(--muted); content: "Карта временно недоступна"; text-align: center; }
+.osm-map-status { min-height: 27px; padding-top: 8px; color: var(--muted); font-size: 0.65rem; }
+.osm-map-shell .leaflet-interactive { cursor: pointer; }
+.osm-map-shell .leaflet-tooltip { color: var(--navy); font-family: "Manrope", sans-serif; font-size: 0.72rem; font-weight: 800; }
+.osm-map-shell .leaflet-control-attribution { max-width: 75%; white-space: normal; font-size: 9px; }
+.osm-map-shell .leaflet-control-attribution a { color: #075f76; }
+.osm-map-shell .leaflet-bar a { color: var(--navy); }
 .map-legend { display: flex; justify-content: center; gap: 18px; color: var(--muted); font-size: 0.65rem; }
 .map-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend-swatch { width: 10px; height: 10px; border-radius: 3px; }
-.legend-swatch.selected { background: #0f7d75; }
-.legend-swatch.affected { background: #9bded2; }
+.legend-swatch.selected { background: #ffc95c; border: 1px solid #7a4c00; }
+.legend-swatch.affected { background: #55cdbc; }
+.legend-swatch.context { background: #c5cfd2; border: 1px dashed #788991; }
+.map-sources { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 9px; padding-top: 9px; border-top: 1px solid #d8e3e5; }
+.map-sources a { color: #176f82; font-size: 0.6rem; font-weight: 700; }
 .district-context { display: grid; grid-template-columns: 190px 1fr; gap: 18px; align-items: start; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
 .district-context h4 { margin: 0; color: var(--navy); font-size: 0.86rem; line-height: 1.5; }
 .indicator-grid { display: grid; grid-template-columns: repeat(5, minmax(54px, 1fr)); gap: 7px; }
@@ -371,7 +381,7 @@ footer strong { color: white; }
   main { width: min(100% - 24px, 1500px); }
   .topbar { padding-inline: 14px; }
   .brand small, .demo-badge { display: none; }
-  .hero { padding: 64px 0 44px; }
+  .hero { padding: 64px 24px 44px; border-radius: 20px; }
   .hero h1 { font-size: 3.4rem; }
   .hero-metrics { min-height: 360px; transform: scale(0.88); }
   .metric-orbit { top: calc(50% + sin(var(--angle)) * 145px); left: calc(50% + cos(var(--angle)) * 145px); width: 106px; min-height: 78px; }
@@ -384,6 +394,7 @@ footer strong { color: white; }
   .map-section, .initiatives-section, .result-panel { padding: 17px; }
   .map-caption, .map-legend { align-items: flex-start; flex-direction: column; }
   .citywide-banner { position: static; display: inline-block; margin-top: 8px; }
+  .osm-map-canvas { height: 330px; }
   .district-context { grid-template-columns: 1fr; }
   .indicator-grid { grid-template-columns: repeat(2, 1fr); }
   .initiative-grid { grid-template-columns: 1fr; }
