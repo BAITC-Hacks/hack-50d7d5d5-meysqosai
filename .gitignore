@@ -1,0 +1,28 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+backend/.venv/
+*.egg-info/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+*.log
+
+# Local data and editor state
+data/*.db
+data/*.sqlite*
+.vscode/*.local.json
+
+# Secrets and credentials
+*.pem
+*.key
+credentials.json
+service-account*.json
