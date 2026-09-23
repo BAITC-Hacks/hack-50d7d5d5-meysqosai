@@ -34,6 +34,26 @@ Content-Type: application/json
   ]
 }
 
+### Evidence cache status
+GET {{baseUrl}}/api/evidence/status
+
+### Refresh official Astana evidence (uses backend OpenAI config)
+POST {{baseUrl}}/api/evidence/refresh
+
+### Advise the published example from cached official evidence
+POST {{baseUrl}}/api/scenarios/advise
+Content-Type: application/json
+
+{
+  "decisions": [
+    {"initiative_id": "M7", "scope": "district", "district_id": "nura"},
+    {"initiative_id": "M8", "scope": "district", "district_id": "nura"},
+    {"initiative_id": "M10", "scope": "district", "district_id": "nura"},
+    {"initiative_id": "M12", "scope": "city", "district_id": null},
+    {"initiative_id": "M5", "scope": "district", "district_id": "saryarka"}
+  ]
+}
+
 ### Create note
 POST {{baseUrl}}/api/notes
 Content-Type: application/json

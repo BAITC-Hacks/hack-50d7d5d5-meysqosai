@@ -6,8 +6,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import Settings, get_settings
-from app.database import create_note, initialize, list_notes
-from app.services.ai import summarize
+from app.database import (
+    create_note,
+    initialize,
+    list_evidence,
+    list_notes,
+    record_evidence_sync,
+    replace_evidence,
+)
+from app.database import (
+    evidence_status as load_evidence_status,
+)
+from app.services.ai import explain_simulation, summarize
+from app.services.evidence import (
+    EvidenceServiceError,
+    advise_scenario,
+    research_evidence,
+    retrieve_evidence,
+)
 from app.services.simulator import (
     FixtureError,
     ScenarioValidationError,
@@ -87,15 +103,104 @@ def validate_simulator_scenario(
 
 
 @app.post("/api/scenarios/simulate")
-def simulate_scenario(
+async def simulate_scenario(
     payload: ScenarioInput,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, object]:
     decisions = [decision.model_dump() for decision in payload.decisions]
+    fixture = simulator_fixture(settings)
     try:
-        return simulate(simulator_fixture(settings), decisions)
+        result = simulate(fixture, decisions)
     except ScenarioValidationError as error:
         raise HTTPException(status_code=422, detail=error.validation) from error
+    explanation, provider = await explain_simulation(
+        result, catalog(fixture)["city_context"], settings
+    )
+    result["explanation"] = explanation
+    result["ai_provider"] = provider
+    return result
+
+
+@app.get("/api/evidence/status")
+def official_evidence_status(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    return load_evidence_status(settings.data_path)
+
+
+@app.get("/api/evidence")
+def official_evidence(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> list[dict[str, object]]:
+    return list_evidence(settings.data_path)
+
+
+@app.post("/api/evidence/refresh")
+async def refresh_official_evidence(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    cached = list_evidence(settings.data_path)
+    try:
+        items, provider = await research_evidence(settings)
+        if not items:
+            status = "cached" if cached else "unavailable"
+            record_evidence_sync(
+                settings.data_path,
+                status=status,
+                provider=provider,
+                item_count=len(cached),
+                error_code="LIVE_RESEARCH_DISABLED",
+            )
+        else:
+            replace_evidence(settings.data_path, items, provider)
+    except EvidenceServiceError as error:
+        status = "cached" if cached else "error"
+        record_evidence_sync(
+            settings.data_path,
+            status=status,
+            provider="openai-web-search",
+            item_count=len(cached),
+            error_code=error.code,
+        )
+        if not cached:
+            raise HTTPException(
+                status_code=503,
+                detail="Не удалось обновить официальные источники. Попробуйте позже.",
+            ) from error
+    return load_evidence_status(settings.data_path)
+
+
+@app.post("/api/scenarios/advise")
+async def advise_simulator_scenario(
+    payload: ScenarioInput,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    decisions = [decision.model_dump() for decision in payload.decisions]
+    fixture = simulator_fixture(settings)
+    try:
+        result = simulate(fixture, decisions)
+    except ScenarioValidationError as error:
+        raise HTTPException(status_code=422, detail=error.validation) from error
+
+    available = list_evidence(settings.data_path)
+    if not available:
+        raise HTTPException(
+            status_code=409,
+            detail="Сначала обновите базу официальных источников.",
+        )
+    selected = result["report_context"]["selected_decisions"]
+    retrieved = retrieve_evidence(available, selected)
+    advice, provider = await advise_scenario(result, retrieved, settings)
+    return {
+        "data_mode": "MIXED",
+        "disclosure": (
+            "Баллы сценария синтетические; ссылки и факты взяты из официальных публикаций "
+            "и не изменяют расчёт автоматически."
+        ),
+        "evidence_status": load_evidence_status(settings.data_path),
+        "advice_provider": provider,
+        **advice,
+    }
 
 
 @app.get("/api/notes")

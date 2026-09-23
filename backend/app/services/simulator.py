@@ -29,6 +29,7 @@ def load_fixture(path_value: str) -> dict[str, Any]:
 
 def _validate_fixture(fixture: dict[str, Any]) -> None:
     try:
+        decision_context = fixture["decision_context"]
         indicators = fixture["indicators"]
         districts = fixture["districts"]
         initiatives = fixture["initiatives"]
@@ -37,6 +38,10 @@ def _validate_fixture(fixture: dict[str, Any]) -> None:
         initiative_ids = {item["id"] for item in initiatives}
         weights_total = sum(float(item["weight"]) for item in indicators)
         population_total = sum(float(item["population_share"]) for item in districts)
+        thresholds = decision_context["interpretation"]
+        critical_below = float(thresholds["critical_below"])
+        attention_below = float(thresholds["attention_below"])
+        strong_at_or_above = float(thresholds["strong_at_or_above"])
     except (KeyError, TypeError, ValueError) as error:
         raise FixtureError("Simulator fixture has an invalid shape") from error
 
@@ -46,6 +51,8 @@ def _validate_fixture(fixture: dict[str, Any]) -> None:
         raise FixtureError("Indicator weights must sum to 1")
     if not math.isclose(population_total, 1.0, abs_tol=1e-9):
         raise FixtureError("District population shares must sum to 1")
+    if not 0 <= critical_below < attention_below < strong_at_or_above <= 100:
+        raise FixtureError("Decision context thresholds must be ordered between 0 and 100")
     for district in districts:
         values = district.get("indicators", {})
         if set(values) != indicator_ids:
@@ -61,7 +68,10 @@ def _validate_fixture(fixture: dict[str, Any]) -> None:
 
 def catalog(fixture: dict[str, Any]) -> dict[str, Any]:
     response = deepcopy(fixture)
-    response["baseline_score"] = _score_state(fixture, _baseline_state(fixture))["score"]
+    baseline_state = _baseline_state(fixture)
+    response["baseline_score"] = _score_state(fixture, baseline_state)["score"]
+    response["city_context"] = _city_context(fixture, baseline_state)
+    response.pop("decision_context", None)
     return response
 
 
@@ -293,14 +303,14 @@ def simulate(
         "baseline_score": baseline_scores["score"],
         "final_score": final_scores["score"],
         "score_delta": round(final_scores["score"] - baseline_scores["score"], 4),
+        "baseline_critical_count": baseline_scores["critical_count"],
         "critical_count": final_scores["critical_count"],
         "district_results": district_results,
         "indicator_deltas": indicator_deltas,
         "initiative_contributions": contributions,
         "activated_synergies": activated_synergies,
     }
-    result["explanation"] = _mock_explanation(result)
-    result["ai_provider"] = "mock"
+    result["report_context"] = _report_context(fixture, decisions, result)
     return result
 
 
@@ -337,29 +347,264 @@ def _score_state(fixture: dict[str, Any], state: dict[str, dict[str, float]]) ->
     }
 
 
-def _mock_explanation(result: dict[str, Any]) -> dict[str, Any]:
-    ranked = sorted(
-        result["district_results"], key=lambda district: district["score_delta"], reverse=True
-    )
-    strongest = ranked[0]
-    weakest = min(result["district_results"], key=lambda district: district["after_score"])
-    risks = [
-        f"{result['critical_count']} district indicators remain below 40."
-        if result["critical_count"]
-        else "No district indicators remain below the critical threshold of 40.",
-        (
-            f"{weakest['name_ru']} remains the lowest-scoring district at "
-            f"{weakest['after_score']:.2f}."
+def _city_context(
+    fixture: dict[str, Any], state: dict[str, dict[str, float]]
+) -> dict[str, Any]:
+    context = deepcopy(fixture["decision_context"])
+    scores = _score_state(fixture, state)
+    thresholds = context["interpretation"]
+    indicator_by_id = {item["id"]: item for item in fixture["indicators"]}
+    district_by_id = {item["id"]: item for item in fixture["districts"]}
+    direction_scores: list[dict[str, Any]] = []
+
+    for direction in fixture["directions"]:
+        direction_indicators = [
+            item for item in fixture["indicators"] if item["direction"] == direction["id"]
+        ]
+        direction_weight = sum(float(item["weight"]) for item in direction_indicators)
+        city_value = sum(
+            float(district["population_share"])
+            * sum(
+                state[district["id"]][item["id"]] * float(item["weight"])
+                for item in direction_indicators
+            )
+            / direction_weight
+            for district in fixture["districts"]
+        )
+        direction_scores.append(
+            {
+                "direction_id": direction["id"],
+                "name_ru": direction["name_ru"],
+                "value": round(city_value, 2),
+            }
+        )
+
+    district_summaries: list[dict[str, Any]] = []
+    critical_indicators: list[dict[str, Any]] = []
+    city_needs: list[dict[str, Any]] = []
+    city_strengths: list[dict[str, Any]] = []
+    for district_id, district_score in scores["district_scores"].items():
+        district = district_by_id[district_id]
+        priorities = []
+        strengths = []
+        for indicator_id, value in state[district_id].items():
+            item = {
+                "indicator_id": indicator_id,
+                "name_ru": indicator_by_id[indicator_id]["name_ru"],
+                "value": round(value, 2),
+            }
+            if value < thresholds["attention_below"]:
+                priorities.append(item)
+                city_needs.append(
+                    {
+                        "district_id": district_id,
+                        "district_name_ru": district["name_ru"],
+                        **item,
+                        "severity": (
+                            "critical" if value < thresholds["critical_below"] else "attention"
+                        ),
+                    }
+                )
+            if value >= thresholds["strong_at_or_above"]:
+                strengths.append(item)
+                city_strengths.append(
+                    {
+                        "district_id": district_id,
+                        "district_name_ru": district["name_ru"],
+                        **item,
+                    }
+                )
+            if value < thresholds["critical_below"]:
+                critical_indicators.append({"district_id": district_id, **item})
+        district_summaries.append(
+            {
+                "district_id": district_id,
+                "name_ru": district["name_ru"],
+                "profile_ru": district["profile_ru"],
+                "score": round(district_score, 2),
+                "priority_indicators": sorted(priorities, key=lambda item: item["value"]),
+                "strong_indicators": sorted(
+                    strengths, key=lambda item: item["value"], reverse=True
+                ),
+            }
+        )
+
+    weakest = min(district_summaries, key=lambda district: district["score"])
+    context["resource_constraints"] = {
+        "budget": fixture["budget"],
+        "required_decisions": fixture["required_decisions"],
+        "max_per_direction": fixture["max_per_direction"],
+        "horizon_quarters": fixture["horizon_quarters"],
+    }
+    context["baseline_snapshot"] = {
+        "score": scores["score"],
+        "critical_count": scores["critical_count"],
+        "weakest_district": {
+            "district_id": weakest["district_id"],
+            "name_ru": weakest["name_ru"],
+            "score": weakest["score"],
+        },
+        "direction_scores": direction_scores,
+        "districts": district_summaries,
+        "critical_indicators": critical_indicators,
+        "city_needs": sorted(city_needs, key=lambda item: item["value"]),
+        "city_strengths": sorted(
+            city_strengths, key=lambda item: item["value"], reverse=True
         ),
+    }
+    return context
+
+
+def _report_context(
+    fixture: dict[str, Any],
+    decisions: list[dict[str, str | None]],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    initiatives = {item["id"]: item for item in fixture["initiatives"]}
+    indicator_by_id = {item["id"]: item for item in fixture["indicators"]}
+    district_by_id = {item["id"]: item for item in fixture["districts"]}
+    direction_by_id = {item["id"]: item for item in fixture["directions"]}
+    baseline_state = _baseline_state(fixture)
+    thresholds = fixture["decision_context"]["interpretation"]
+    weakest = min(result["district_results"], key=lambda district: district["after_score"])
+
+    selected_decisions = []
+    direction_spend: dict[str, int] = {}
+    targeted_district_ids: set[str] = set()
+    for decision in decisions:
+        initiative = initiatives[decision["initiative_id"]]
+        district_id = decision.get("district_id")
+        contribution = next(
+            item
+            for item in result["initiative_contributions"]
+            if item["initiative_id"] == initiative["id"]
+        )
+        target_ids = contribution["district_ids"]
+        related_baseline = [
+            {
+                "district_id": target_id,
+                "district_name_ru": district_by_id[target_id]["name_ru"],
+                "indicator_id": indicator_id,
+                "indicator_name_ru": indicator_by_id[indicator_id]["name_ru"],
+                "value": baseline_state[target_id][indicator_id],
+            }
+            for target_id in target_ids
+            for indicator_id in initiative["effects"]
+            if initiative["effects"][indicator_id] > 0
+        ]
+        weakest_related = min(related_baseline, key=lambda item: item["value"])
+        realized_effects = [
+            {
+                "indicator_id": indicator_id,
+                "indicator_name_ru": indicator_by_id[indicator_id]["name_ru"],
+                "delta": round(delta, 4),
+            }
+            for indicator_id, delta in contribution["effects"].items()
+        ]
+        if district_id is not None:
+            targeted_district_ids.add(district_id)
+        direction_spend[initiative["direction"]] = (
+            direction_spend.get(initiative["direction"], 0) + int(initiative["cost"])
+        )
+        selected_decisions.append(
+            {
+                "initiative_id": initiative["id"],
+                "name_ru": initiative["name_ru"],
+                "direction": initiative["direction"],
+                "direction_name_ru": direction_by_id[initiative["direction"]]["name_ru"],
+                "scope": initiative["scope"],
+                "district_id": district_id,
+                "target_name_ru": (
+                    district_by_id[district_id]["name_ru"]
+                    if district_id is not None
+                    else "Весь город"
+                ),
+                "cost": initiative["cost"],
+                "lag_quarters": initiative["lag_quarters"],
+                "realized_fraction": contribution["realized_fraction"],
+                "realized_effects": realized_effects,
+                "rationale_ru": (
+                    f"Мера влияет на направление «"
+                    f"{direction_by_id[initiative['direction']]['name_ru']}». "
+                    f"Самая слабая связанная точка baseline — "
+                    f"{weakest_related['district_name_ru']}: "
+                    f"{weakest_related['indicator_name_ru']} "
+                    f"{weakest_related['value']:.0f}/100."
+                ),
+            }
+        )
+
+    remaining_critical = []
+    for district in result["district_results"]:
+        for indicator_id, values in district["indicators"].items():
+            if values["after"] < thresholds["critical_below"]:
+                remaining_critical.append(
+                    {
+                        "district_id": district["district_id"],
+                        "district_name_ru": district["name_ru"],
+                        "indicator_id": indicator_id,
+                        "indicator_name_ru": indicator_by_id[indicator_id]["name_ru"],
+                        "value": values["after"],
+                    }
+                )
+
+    tradeoffs = [
+        {
+            **delta,
+            "district_name_ru": district_by_id[delta["district_id"]]["name_ru"],
+            "indicator_name_ru": indicator_by_id[delta["indicator_id"]]["name_ru"],
+        }
+        for delta in result["indicator_deltas"]
+        if delta["delta"] < 0
     ]
+    improved = sorted(
+        (
+            {
+                **delta,
+                "district_name_ru": district_by_id[delta["district_id"]]["name_ru"],
+                "indicator_name_ru": indicator_by_id[delta["indicator_id"]]["name_ru"],
+            }
+            for delta in result["indicator_deltas"]
+            if delta["delta"] > 0
+        ),
+        key=lambda delta: delta["delta"],
+        reverse=True,
+    )
+
     return {
-        "summary": f"Quality of Life Score changes by {result['score_delta']:+.2f} points.",
-        "strengths": [
-            f"{strongest['name_ru']} gains the most: {strongest['score_delta']:+.2f} points.",
-            f"The scenario stays within budget with {result['remaining_budget']} units remaining.",
-        ],
-        "risks": risks,
-        "recommendations": [
-            "Compare the weakest district and remaining critical indicators before finalizing policy."
-        ],
+        "goal_status": {
+            "score_improved": result["score_delta"] > 0,
+            "score_delta": result["score_delta"],
+            "critical_count_before": result["baseline_critical_count"],
+            "critical_count_after": result["critical_count"],
+            "critical_deficits_reduced": (
+                result["critical_count"] < result["baseline_critical_count"]
+            ),
+            "weakest_district": {
+                "district_id": weakest["district_id"],
+                "name_ru": weakest["name_ru"],
+                "score": weakest["after_score"],
+                "score_delta": weakest["score_delta"],
+            },
+        },
+        "resource_use": {
+            "budget": fixture["budget"],
+            "spent": result["total_cost"],
+            "remaining": result["remaining_budget"],
+            "decisions_used": result["decision_count"],
+            "decisions_required": fixture["required_decisions"],
+            "horizon_quarters": fixture["horizon_quarters"],
+            "direction_spend": direction_spend,
+        },
+        "coverage": {
+            "targeted_district_ids": sorted(targeted_district_ids),
+            "citywide_decision_count": sum(
+                1 for item in selected_decisions if item["scope"] == "city"
+            ),
+            "directions_used": sorted(direction_spend),
+        },
+        "selected_decisions": selected_decisions,
+        "largest_improvements": improved[:5],
+        "remaining_critical_indicators": remaining_critical,
+        "tradeoffs": tradeoffs,
     }

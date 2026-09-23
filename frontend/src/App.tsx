@@ -28,6 +28,24 @@ type Initiative = {
   lag_quarters: number;
   effects: Record<string, number>;
 };
+type ContextIndicator = {
+  indicator_id: string;
+  name_ru: string;
+  value: number;
+};
+type CityNeed = ContextIndicator & {
+  district_id: string;
+  district_name_ru: string;
+  severity: "critical" | "attention";
+};
+type DistrictContext = {
+  district_id: string;
+  name_ru: string;
+  profile_ru: string;
+  score: number;
+  priority_indicators: ContextIndicator[];
+  strong_indicators: ContextIndicator[];
+};
 type Catalog = {
   data_mode: "SAMPLE";
   dataset_version: string;
@@ -36,6 +54,18 @@ type Catalog = {
   horizon_quarters: number;
   max_per_direction: number;
   baseline_score: number;
+  city_context: {
+    mission_ru: string;
+    data_disclosure_ru: string;
+    goals: string[];
+    baseline_snapshot: {
+      critical_count: number;
+      weakest_district: { name_ru: string; score: number };
+      direction_scores: { direction_id: string; name_ru: string; value: number }[];
+      districts: DistrictContext[];
+      city_needs: CityNeed[];
+    };
+  };
   directions: Direction[];
   indicators: Indicator[];
   districts: District[];
@@ -71,10 +101,69 @@ type SimulationResult = Validation & {
   activated_synergies: string[];
   explanation: {
     summary: string;
+    verdict: "improved" | "mixed" | "declined";
     strengths: string[];
     risks: string[];
+    tradeoffs: string[];
+    resource_assessment: string;
     recommendations: string[];
   };
+  ai_provider: string;
+  report_context: {
+    selected_decisions: {
+      initiative_id: string;
+      name_ru: string;
+      direction_name_ru: string;
+      target_name_ru: string;
+      cost: number;
+      lag_quarters: number;
+      realized_fraction: number;
+      realized_effects: {
+        indicator_id: string;
+        indicator_name_ru: string;
+        delta: number;
+      }[];
+      rationale_ru: string;
+    }[];
+  };
+};
+type EvidenceStatus = {
+  status: "empty" | "ready" | "cached" | "error" | "unavailable";
+  provider: string | null;
+  item_count: number;
+  error_code: string | null;
+  updated_at: string | null;
+};
+type EvidenceItem = {
+  id: number;
+  title: string;
+  url: string;
+  publisher: string;
+  published_at: string;
+  direction: string;
+  claim_type: "plan" | "reported_output" | "reported_outcome" | "independent_statistic" | "audit_issue";
+  claim: string;
+  confidence: "high" | "medium" | "low";
+  limitations: string[];
+};
+type EvidenceAdvice = {
+  data_mode: "MIXED";
+  disclosure: string;
+  evidence_status: EvidenceStatus;
+  advice_provider: string;
+  city_digest: {
+    proven_patterns: string[];
+    caution_signals: string[];
+    evidence_gaps: string[];
+  };
+  recommendations: {
+    initiative_id: string;
+    assessment: "supported" | "promising_with_conditions" | "caution" | "not_recommended" | "insufficient_evidence";
+    confidence: "high" | "medium" | "low";
+    rationale: string;
+    conditions: string[];
+    evidence: EvidenceItem[];
+  }[];
 };
 
 const STORAGE_KEY = "meysqosai-scenarios-v1";
@@ -145,6 +234,22 @@ const directionIcons: Record<string, IconName> = {
 function quarterLabel(value: number): string {
   return value === 1 ? "1-го квартала" : `${value}-го квартала`;
 }
+
+const assessmentLabels: Record<EvidenceAdvice["recommendations"][number]["assessment"], string> = {
+  supported: "Подтверждено",
+  promising_with_conditions: "Перспективно с условиями",
+  caution: "Нужна осторожность",
+  not_recommended: "Не рекомендуется",
+  insufficient_evidence: "Недостаточно данных",
+};
+
+const claimTypeLabels: Record<EvidenceItem["claim_type"], string> = {
+  plan: "План",
+  reported_output: "Выполненная работа",
+  reported_outcome: "Заявленный результат",
+  independent_statistic: "Независимая статистика",
+  audit_issue: "Аудиторский риск",
+};
 
 function BudgetPanel({
   catalog,
@@ -254,6 +359,10 @@ export default function App() {
   const [targetScope, setTargetScope] = useState<"city" | "district">("district");
   const [validation, setValidation] = useState<Validation | null>(null);
   const [result, setResult] = useState<SimulationResult | null>(null);
+  const [evidenceStatus, setEvidenceStatus] = useState<EvidenceStatus | null>(null);
+  const [evidenceAdvice, setEvidenceAdvice] = useState<EvidenceAdvice | null>(null);
+  const [evidenceBusy, setEvidenceBusy] = useState(false);
+  const [evidenceError, setEvidenceError] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const plannerRef = useRef<HTMLElement>(null);
@@ -266,6 +375,12 @@ export default function App() {
         setError("");
       })
       .catch((reason: Error) => setError(reason.message));
+  }, []);
+
+  useEffect(() => {
+    api<EvidenceStatus>("/api/evidence/status")
+      .then(setEvidenceStatus)
+      .catch((reason: Error) => setEvidenceError(reason.message));
   }, []);
 
   useEffect(() => {
@@ -296,6 +411,32 @@ export default function App() {
       });
     return () => controller.abort();
   }, [catalog, activeScenario.decisions]);
+
+  useEffect(() => {
+    if (!result || !evidenceStatus?.item_count) {
+      setEvidenceAdvice(null);
+      return;
+    }
+    const controller = new AbortController();
+    setEvidenceBusy(true);
+    setEvidenceError("");
+    api<EvidenceAdvice>("/api/scenarios/advise", {
+      method: "POST",
+      body: JSON.stringify({ decisions: activeScenario.decisions }),
+      signal: controller.signal,
+    })
+      .then((nextAdvice) => {
+        setEvidenceAdvice(nextAdvice);
+        setEvidenceStatus(nextAdvice.evidence_status);
+      })
+      .catch((reason: Error) => {
+        if (reason.name !== "AbortError") setEvidenceError(reason.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setEvidenceBusy(false);
+      });
+    return () => controller.abort();
+  }, [result, evidenceStatus?.item_count, activeScenario.decisions]);
 
   const initiatives = useMemo(
     () => new Map(catalog?.initiatives.map((item) => [item.id, item]) ?? []),
@@ -409,6 +550,20 @@ export default function App() {
       decisions: previous.decisions.map((decision) => ({ ...decision })),
     }));
     setNotice("Сценарий скопирован. Измените хотя бы одно решение, чтобы сделать вариант уникальным.");
+  }
+
+  async function refreshEvidence() {
+    setEvidenceBusy(true);
+    setEvidenceError("");
+    try {
+      const nextStatus = await api<EvidenceStatus>("/api/evidence/refresh", { method: "POST" });
+      setEvidenceStatus(nextStatus);
+      setEvidenceAdvice(null);
+    } catch (reason) {
+      setEvidenceError(reason instanceof Error ? reason.message : "Источники не обновлены");
+    } finally {
+      setEvidenceBusy(false);
+    }
   }
 
   return (
@@ -525,6 +680,15 @@ export default function App() {
               <div className="model-note">
                 <strong>О модели</strong>
                 <p>Все значения синтетические. Расчёты выполняет прозрачная математическая модель, а не ИИ.</p>
+              </div>
+              <div className="model-note city-theory">
+                <strong>Цель управления</strong>
+                <p>{catalog.city_context.mission_ru}</p>
+                <small>
+                  Слабейший baseline: {catalog.city_context.baseline_snapshot.weakest_district.name_ru}
+                  {" · "}{catalog.city_context.baseline_snapshot.weakest_district.score.toFixed(2)}
+                  {" · критических показателей: "}{catalog.city_context.baseline_snapshot.critical_count}
+                </small>
               </div>
             </aside>
 
@@ -723,22 +887,24 @@ export default function App() {
               </section>
 
               {result && (
-                <section className="result-panel">
+                <>
+                  <section className="result-panel">
                   <div className="result-score">
                     <p className="section-kicker">Сценарий рассчитан</p>
                     <strong>{result.final_score.toFixed(2)}</strong>
                     <span>{result.score_delta >= 0 ? "+" : ""}{result.score_delta.toFixed(2)} к исходному значению</span>
                   </div>
                   <div className="result-copy">
-                    <h3>
-                      Индекс изменился на {result.score_delta >= 0 ? "+" : ""}
-                      {result.score_delta.toFixed(2)} пункта
-                    </h3>
-                    <p>
-                      Наибольший прирост получил район {result.district_results.reduce(
-                        (best, district) => district.score_delta > best.score_delta ? district : best,
-                      ).name_ru}.
-                    </p>
+                    <div className="report-heading">
+                      <h3>
+                        AI-отчёт: индекс изменился на {result.score_delta >= 0 ? "+" : ""}
+                        {result.score_delta.toFixed(2)} пункта
+                      </h3>
+                      <span className={`verdict ${result.explanation.verdict}`}>
+                        {result.explanation.verdict === "improved" ? "Улучшение" : result.explanation.verdict === "mixed" ? "Смешанный результат" : "Ухудшение"}
+                      </span>
+                    </div>
+                    <p>{result.explanation.summary}</p>
                     <div className="district-deltas">
                       {result.district_results.map((district) => (
                         <span key={district.district_id}>
@@ -750,8 +916,172 @@ export default function App() {
                     {result.activated_synergies.length > 0 && (
                       <p className="synergy-note">Сработала синергия: {result.activated_synergies.join(", ")}</p>
                     )}
+                    <div className="report-grid">
+                      <div><strong>Что хорошо</strong><ul>{result.explanation.strengths.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                      <div><strong>Риски</strong><ul>{result.explanation.risks.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                      <div><strong>Компромиссы</strong><ul>{result.explanation.tradeoffs.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                      <div><strong>Следующий шаг</strong><ul>{result.explanation.recommendations.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                    </div>
+                    <p className="resource-report">{result.explanation.resource_assessment} · Источник отчёта: {result.ai_provider}</p>
                   </div>
-                </section>
+                  </section>
+
+                  <section className="city-report-panel">
+                    <div className="section-heading city-report-heading">
+                      <div>
+                        <p className="section-kicker">Обоснование сценария</p>
+                        <h3>Что выбрано, зачем это нужно и что известно о городе</h3>
+                      </div>
+                      <span className="rule-pill">После финального расчёта</span>
+                    </div>
+
+                    <div className="evidence-toolbar">
+                      <div>
+                        <p className="section-kicker">Официальная практика Астаны</p>
+                        <h4>RAG-проверка решений по городским источникам</h4>
+                        <p>
+                          {evidenceStatus?.item_count
+                            ? `В локальном кэше ${evidenceStatus.item_count} проверяемых фактов. Они не меняют синтетический score.`
+                            : "Обновите базу, чтобы сопоставить сценарий с официальными публикациями и статистикой."}
+                        </p>
+                      </div>
+                      <button className="secondary-button" onClick={refreshEvidence} disabled={evidenceBusy}>
+                        {evidenceBusy ? "Анализируем…" : evidenceStatus?.item_count ? "Обновить источники" : "Загрузить источники"}
+                      </button>
+                    </div>
+                    {evidenceStatus?.updated_at && (
+                      <p className="evidence-status">
+                        Статус: {evidenceStatus.status} · обновлено {new Date(evidenceStatus.updated_at).toLocaleString("ru-RU")} · провайдер {evidenceStatus.provider}
+                      </p>
+                    )}
+                    {evidenceError && <div className="evidence-warning" role="alert">{evidenceError}</div>}
+
+                    {evidenceAdvice && (
+                      <div className="evidence-report">
+                        <p className="evidence-disclosure">{evidenceAdvice.disclosure}</p>
+                        <div className="evidence-digest">
+                          <div><strong>Что подтверждается</strong><ul>{evidenceAdvice.city_digest.proven_patterns.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                          <div><strong>Сигналы осторожности</strong><ul>{evidenceAdvice.city_digest.caution_signals.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                          <div><strong>Пробелы данных</strong><ul>{evidenceAdvice.city_digest.evidence_gaps.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                        </div>
+                        <div className="evidence-recommendations">
+                          {evidenceAdvice.recommendations.map((recommendation) => {
+                            const decision = result.report_context.selected_decisions.find((item) => item.initiative_id === recommendation.initiative_id);
+                            return (
+                              <article key={recommendation.initiative_id}>
+                                <header>
+                                  <div><small>{recommendation.initiative_id}</small><h5>{decision?.name_ru ?? recommendation.initiative_id}</h5></div>
+                                  <span className={`assessment ${recommendation.assessment}`}>{assessmentLabels[recommendation.assessment]}</span>
+                                </header>
+                                <p>{recommendation.rationale}</p>
+                                {recommendation.conditions.length > 0 && <ul className="evidence-conditions">{recommendation.conditions.map((item) => <li key={item}>{item}</li>)}</ul>}
+                                <div className="source-list">
+                                  {recommendation.evidence.map((source) => (
+                                    <a href={source.url} target="_blank" rel="noreferrer" key={`${source.id}-${source.claim}`}>
+                                      <span>{claimTypeLabels[source.claim_type]} · доверие {source.confidence}</span>
+                                      <strong>{source.title}</strong>
+                                      <p>{source.claim}</p>
+                                      <small>{source.publisher} · {source.published_at} ↗</small>
+                                    </a>
+                                  ))}
+                                  {recommendation.evidence.length === 0 && <small className="no-source">Для этого решения в текущем кэше нет прямого источника.</small>}
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="choice-explanations">
+                      {result.report_context.selected_decisions.map((decision, index) => (
+                        <article className="choice-explanation" key={decision.initiative_id}>
+                          <div className="choice-index">{index + 1}</div>
+                          <div className="choice-body">
+                            <div className="choice-meta">
+                              <span>{decision.initiative_id} · {decision.direction_name_ru}</span>
+                              <span>{decision.target_name_ru}</span>
+                            </div>
+                            <h4>{decision.name_ru}</h4>
+                            <p>{decision.rationale_ru}</p>
+                            <div className="choice-effects">
+                              {decision.realized_effects.map((effect) => (
+                                <span className={effect.delta < 0 ? "negative" : ""} key={effect.indicator_id}>
+                                  {effect.indicator_name_ru} {effect.delta >= 0 ? "+" : ""}{effect.delta.toFixed(2)}
+                                </span>
+                              ))}
+                            </div>
+                            <small>
+                              {decision.cost} coin · лаг {decision.lag_quarters} кв. · реализовано к горизонту {Math.round(decision.realized_fraction * 100)}%
+                            </small>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+
+                    <div className="city-knowledge-intro">
+                      <div>
+                        <p className="section-kicker">Что знает модель</p>
+                        <h4>{catalog.city_context.mission_ru}</h4>
+                        <p>{catalog.city_context.data_disclosure_ru}</p>
+                      </div>
+                      <ul>
+                        {catalog.city_context.goals.map((goal) => <li key={goal}>{goal}</li>)}
+                      </ul>
+                    </div>
+
+                    <div className="knowledge-section">
+                      <h4>Состояние направлений до решений</h4>
+                      <div className="direction-knowledge">
+                        {catalog.city_context.baseline_snapshot.direction_scores.map((direction) => (
+                          <div key={direction.direction_id}>
+                            <span>{direction.name_ru}</span>
+                            <strong>{direction.value.toFixed(1)}</strong>
+                            <i><b style={{ width: `${direction.value}%` }} /></i>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="knowledge-section">
+                      <h4>Что нужно городу по baseline</h4>
+                      <p>Все показатели ниже порога внимания 55, начиная с самых слабых.</p>
+                      <div className="city-needs-grid">
+                        {catalog.city_context.baseline_snapshot.city_needs.map((need) => (
+                          <span className={need.severity} key={`${need.district_id}-${need.indicator_id}`}>
+                            <small>{need.severity === "critical" ? "Критично" : "Внимание"} · {need.district_name_ru}</small>
+                            <strong>{need.value.toFixed(0)}</strong>
+                            <em>{need.name_ru}</em>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="knowledge-section">
+                      <h4>Профиль каждого района</h4>
+                      <div className="district-knowledge-grid">
+                        {catalog.city_context.baseline_snapshot.districts.map((district) => (
+                          <article key={district.district_id}>
+                            <header><strong>{district.name_ru}</strong><span>{district.score.toFixed(2)}</span></header>
+                            <p>{district.profile_ru}</p>
+                            <small>Нужно усилить</small>
+                            <ul>
+                              {district.priority_indicators.length > 0
+                                ? district.priority_indicators.map((indicator) => <li key={indicator.indicator_id}>{indicator.name_ru}: {indicator.value.toFixed(0)}</li>)
+                                : <li>Нет показателей ниже 55</li>}
+                            </ul>
+                            <small>Сильные стороны</small>
+                            <ul>
+                              {district.strong_indicators.length > 0
+                                ? district.strong_indicators.map((indicator) => <li key={indicator.indicator_id}>{indicator.name_ru}: {indicator.value.toFixed(0)}</li>)
+                                : <li>Нет показателей от 70</li>}
+                            </ul>
+                          </article>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                </>
               )}
             </div>
 
