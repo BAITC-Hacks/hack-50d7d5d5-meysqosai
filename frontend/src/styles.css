@@ -398,7 +398,7 @@ footer strong { color: white; }
 
 @media (max-width: 1200px) {
   .workspace-grid { grid-template-columns: 210px minmax(0, 1fr); }
-  .budget-panel { position: static; grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .budget-panel { position: static; grid-column: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .budget-heading, .budget-numbers, .budget-track, .coin-grid { grid-column: 1; }
   .coin-grid { grid-template-columns: repeat(10, 18px); }
   .decision-progress, .selected-list, .score-preview, .validation-message { grid-column: 2; }
