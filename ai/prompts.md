@@ -1,32 +1,28 @@
-# Prompt registry
+# Runtime prompt registry
 
-For each production prompt record:
+Executable code is the source of truth; this index avoids duplicated prompt text.
+Reports are requested in Russian. Never include credentials or personal records.
 
-- Name and purpose
-- Inputs and data classification
-- Exact prompt or template
-- Expected output schema
-- Failure/fallback behavior
-- Evaluation cases
-- Last change and reason
+| Purpose | Source entry point | Inputs and boundaries |
+| --- | --- | --- |
+| Recalculation report | backend/app/services/ai.py::explain_simulation | City theory + calculated report context; ScenarioExplanation schema; deterministic fallback |
+| Overall comparison first | backend/app/services/ai.py::compare_results | Five results + server-selected winners; all ties retained; ComparisonExplanation schema |
+| Official research | backend/app/services/evidence.py::research_evidence | Astana instructions, allowlisted web search and structured claims; manual paid refresh |
+| Source-based advice | backend/app/services/evidence.py::advise_scenario | Calculated scenario + direction-retrieved evidence; supplied citation IDs only; fallback |
 
-## `scenario_recalculation_report_v1`
+Shared theory lives in data/simulator.json. The simulator derives city_context and
+report_context; news never changes scores. Source content and model output are
+untrusted: schema validation is not factual verification.
 
-- **Purpose:** explain a completed deterministic city scenario in Russian for a human decision-maker.
-- **Inputs:** versioned synthetic `city_context`, baseline/final score, and deterministic `report_context`. Classification: public demo data; no personal data or secrets.
-- **Instructions:**
+## Development provenance
 
-```text
-Ты аналитический агент демонстрационной модели города. Все данные синтетические.
-Объясни результат на русском языке только по входным рассчитанным фактам.
-Не пересчитывай и не придумывай числа, городские факты или причинность.
-Рост общего score не отменяет критические дефициты, слабый район или trade-offs.
-Верни только JSON с ключами summary, verdict, strengths, risks, tradeoffs,
-resource_assessment, recommendations. verdict: improved, mixed или declined.
-Все остальные текстовые поля — строки или массивы строк.
-```
+- [Master brief](../docs/master-implementation-prompt.md): original product/UX planning
+  prompt, not a claim that all aspirations were implemented.
+- [AGENTS.md](../AGENTS.md): current coding, testing and handoff instructions.
+- [Local skills](../skills/): shape-mvp, implement-mvp-slice, verify-debug and
+  ship-hackathon. Readable Markdown workflows, not runtime application dependencies.
+- [Evaluations](evaluations.md): qualitative cases alongside backend tests.
 
-- **Output schema:** `summary: string`, `verdict: improved | mixed | declined`, `strengths: string[1..5]`, `risks: string[1..5]`, `tradeoffs: string[0..5]`, `resource_assessment: string`, `recommendations: string[1..5]`. Unknown fields are rejected.
-- **Fallback:** invalid provider configuration, request failure, malformed JSON, or schema failure returns the deterministic mock report and marks `ai_provider` as `mock-fallback`.
-- **Evaluations:** cases in `ai/evaluations.md`, plus backend contract tests.
-- **Last change:** 2026-09-23 — added shared city theory and auditable recalculation context so the report covers goals, equity, resources, and trade-offs instead of only the headline score.
+Change prompts in their source functions, update this index when responsibilities
+change, and verify mock fallback and structured-output handling. Do not commit
+private chat history or secret-bearing prompts.

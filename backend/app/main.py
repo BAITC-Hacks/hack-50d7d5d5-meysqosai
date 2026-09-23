@@ -7,17 +7,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import Settings, get_settings
 from app.database import (
-    create_note,
+    evidence_status as load_evidence_status,
+)
+from app.database import (
     initialize,
     list_evidence,
-    list_notes,
     record_evidence_sync,
     replace_evidence,
 )
-from app.database import (
-    evidence_status as load_evidence_status,
-)
-from app.services.ai import compare_results, explain_simulation, summarize
+from app.services.ai import compare_results, explain_simulation
 from app.services.evidence import (
     EvidenceServiceError,
     advise_scenario,
@@ -32,15 +30,6 @@ from app.services.simulator import (
     simulate,
     validate_scenario,
 )
-
-
-class NoteInput(BaseModel):
-    title: str = Field(min_length=1, max_length=120)
-    body: str = Field(min_length=1, max_length=5_000)
-
-
-class TextInput(BaseModel):
-    text: str = Field(min_length=1, max_length=20_000)
 
 
 class DecisionInput(BaseModel):
@@ -69,7 +58,7 @@ async def lifespan(_: FastAPI):
 
 
 settings = get_settings()
-app = FastAPI(title="Solo Hackathon API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="MeysQosAI API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],
@@ -220,28 +209,3 @@ async def advise_simulator_scenario(
         "advice_provider": provider,
         **advice,
     }
-
-
-@app.get("/api/notes")
-def notes(settings: Annotated[Settings, Depends(get_settings)]) -> list[dict[str, object]]:
-    return list_notes(settings.data_path)
-
-
-@app.post("/api/notes", status_code=201)
-def add_note(
-    payload: NoteInput,
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> dict[str, object]:
-    return create_note(settings.data_path, payload.title, payload.body)
-
-
-@app.post("/api/ai/summarize")
-async def ai_summary(
-    payload: TextInput,
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> dict[str, str]:
-    try:
-        result, provider = await summarize(payload.text, settings)
-    except ValueError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-    return {"summary": result, "provider": provider}

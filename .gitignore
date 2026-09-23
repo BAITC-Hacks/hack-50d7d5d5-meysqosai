@@ -26,3 +26,4 @@ data/*.sqlite*
 *.key
 credentials.json
 service-account*.json
+data/*.db-*

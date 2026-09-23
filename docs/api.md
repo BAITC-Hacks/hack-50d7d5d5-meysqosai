@@ -225,3 +225,7 @@ Without cached evidence the endpoint returns 409. AI failure falls back to deter
 3. The supplied five-decision example validates at cost 95 and calculates to approximately 56.5.
 4. An over-budget, duplicate, wrong-scope, or incompatible scenario returns an actionable violation and no score.
 5. Simulation succeeds with `AI_PROVIDER=mock` and with no network credentials.
+# Scope note
+
+Unused starter `/api/notes` and `/api/ai/summarize` endpoints have been removed.
+They were not part of the simulator UI. No existing local database data is deleted.

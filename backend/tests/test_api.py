@@ -1,8 +1,4 @@
 import os
-import tempfile
-
-os.environ["DATA_PATH"] = tempfile.mktemp(suffix=".db")
-os.environ["AI_PROVIDER"] = "mock"
 
 from fastapi.testclient import TestClient
 
@@ -53,21 +49,6 @@ def test_comparison_selects_highest_score() -> None:
         }).json()
     assert response["best_score"] == max(scores)
     assert response["winner_indexes"] == [i for i, score in enumerate(scores) if score == max(scores)]
-
-
-def test_note_round_trip() -> None:
-    with TestClient(app) as client:
-        created = client.post("/api/notes", json={"title": "Triage", "body": "Demo case"})
-        listed = client.get("/api/notes")
-    assert created.status_code == 201
-    assert listed.json()[0]["title"] == "Triage"
-
-
-def test_mock_summary_requires_no_key() -> None:
-    with TestClient(app) as client:
-        response = client.post("/api/ai/summarize", json={"text": "A public service update."})
-    assert response.status_code == 200
-    assert response.json()["provider"] == "mock"
 
 
 def test_evidence_advice_uses_cached_sources_without_network() -> None:
