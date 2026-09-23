@@ -89,8 +89,15 @@ No personal data is stored. A reset may clear demo scenarios without affecting t
 - **Rejected:** asking an LLM to estimate scores or effects.
 - **Rollback:** the AI layer can be removed without changing validation or scoring.
 
-### 2026-09-23 — Defer map and leaderboard
+### 2026-09-23 — Defer real GIS and leaderboard
 
-- **Reason:** a district comparison chart/table proves impact faster and with less risk than GIS or team identity.
-- **Rejected:** map-first and multi-team architecture during the first slice.
-- **Rollback:** add visual geography or saved-scenario comparison after the Golden Path is verified.
+- **Reason:** district indicators prove impact with less risk than real GIS or team identity.
+- **Rejected:** geographic mapping dependencies and multi-team architecture during the first slice.
+- **Rollback:** add sourced geography or saved-scenario comparison after the Golden Path is verified.
+
+### 2026-09-23 — Use a schematic district map, not invented GIS geometry
+
+- **Reason:** the user needs spatial context, but the synthetic dataset has no verified boundary geometry.
+- **Decision:** render an accessible abstract SVG with clearly disclosed non-official boundaries; highlight one district for district measures and the whole diagram for city measures.
+- **Rejected:** adding a GIS library, basemap, or geographically precise-looking polygons without a trustworthy source.
+- **Rollback:** replace the SVG with sourced GeoJSON behind the same district IDs if official geometry becomes available.
