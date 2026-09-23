@@ -1,0 +1,61 @@
+{
+  "data_mode": "SAMPLE",
+  "dataset_version": "2026-09-23",
+  "budget": 100,
+  "required_decisions": 5,
+  "horizon_quarters": 8,
+  "max_per_direction": 2,
+  "published_baseline_score": 52.56,
+  "directions": [
+    {"id": "transport", "name_ru": "Транспорт", "name_en": "Transport"},
+    {"id": "environment", "name_ru": "Экология", "name_en": "Environment"},
+    {"id": "social", "name_ru": "Соцсфера", "name_en": "Social infrastructure"},
+    {"id": "safety", "name_ru": "Безопасность", "name_en": "Safety"},
+    {"id": "services", "name_ru": "Сервисы", "name_en": "City services"}
+  ],
+  "indicators": [
+    {"id": "T1", "direction": "transport", "weight": 0.10, "name_ru": "Разгрузка дорог", "name_en": "Road congestion relief"},
+    {"id": "T2", "direction": "transport", "weight": 0.10, "name_ru": "Доступность общественного транспорта", "name_en": "Public transport access"},
+    {"id": "E1", "direction": "environment", "weight": 0.09, "name_ru": "Озеленение", "name_en": "Green space"},
+    {"id": "E2", "direction": "environment", "weight": 0.11, "name_ru": "Качество воздуха", "name_en": "Air quality"},
+    {"id": "S1", "direction": "social", "weight": 0.11, "name_ru": "Школы и детсады", "name_en": "Schools and kindergartens"},
+    {"id": "S2", "direction": "social", "weight": 0.11, "name_ru": "Поликлиники и первичная медпомощь", "name_en": "Primary healthcare"},
+    {"id": "B1", "direction": "safety", "weight": 0.09, "name_ru": "Безопасность улиц", "name_en": "Street safety"},
+    {"id": "B2", "direction": "safety", "weight": 0.09, "name_ru": "Безопасность дорожного движения", "name_en": "Road safety"},
+    {"id": "C1", "direction": "services", "weight": 0.10, "name_ru": "Надёжность ЖКХ", "name_en": "Utility reliability"},
+    {"id": "C2", "direction": "services", "weight": 0.10, "name_ru": "Скорость решения обращений жителей", "name_en": "Resident request resolution"}
+  ],
+  "districts": [
+    {"id": "yesil", "name_ru": "Есиль", "name_en": "Yesil", "population_share": 0.27, "profile_ru": "Богатый, но с пробками на мостах и переполненными школами.", "indicators": {"T1": 45, "T2": 62, "E1": 68, "E2": 72, "S1": 48, "S2": 55, "B1": 78, "B2": 60, "C1": 75, "C2": 70}},
+    {"id": "almaty", "name_ru": "Алматы", "name_en": "Almaty", "population_share": 0.24, "profile_ru": "Старый ЖКХ и пробки.", "indicators": {"T1": 40, "T2": 75, "E1": 50, "E2": 55, "S1": 60, "S2": 65, "B1": 62, "B2": 52, "C1": 50, "C2": 60}},
+    {"id": "saryarka", "name_ru": "Сарыарка", "name_en": "Saryarka", "population_share": 0.20, "profile_ru": "Смог от частного сектора, слабое озеленение.", "indicators": {"T1": 50, "T2": 70, "E1": 42, "E2": 40, "S1": 62, "S2": 68, "B1": 58, "B2": 55, "C1": 45, "C2": 55}},
+    {"id": "baikonur", "name_ru": "Байконур", "name_en": "Baikonur", "population_share": 0.13, "profile_ru": "Середняк без ярких перекосов.", "indicators": {"T1": 52, "T2": 68, "E1": 55, "E2": 50, "S1": 58, "S2": 60, "B1": 52, "B2": 58, "C1": 55, "C2": 58}},
+    {"id": "nura", "name_ru": "Нура", "name_en": "Nura", "population_share": 0.16, "profile_ru": "Главный аутсайдер по соцсфере и транспорту.", "indicators": {"T1": 55, "T2": 40, "E1": 45, "E2": 65, "S1": 38, "S2": 35, "B1": 55, "B2": 50, "C1": 60, "C2": 50}}
+  ],
+  "initiatives": [
+    {"id": "M1", "direction": "transport", "name_ru": "Выделенные полосы для автобусов", "scope": "district", "cost": 18, "lag_quarters": 2, "effects": {"T1": 6, "T2": 9}},
+    {"id": "M2", "direction": "transport", "name_ru": "Умные светофоры (адаптивное управление)", "scope": "city", "cost": 22, "lag_quarters": 2, "effects": {"T1": 4, "B2": 3}},
+    {"id": "M3", "direction": "transport", "name_ru": "Линия ЛРТ / расширение", "scope": "district", "cost": 30, "lag_quarters": 4, "effects": {"T1": 16, "T2": 20, "E2": 4}},
+    {"id": "M4", "direction": "environment", "name_ru": "Парк / сквер", "scope": "district", "cost": 15, "lag_quarters": 2, "effects": {"E1": 12, "E2": 3, "B1": 2}},
+    {"id": "M5", "direction": "environment", "name_ru": "Перевод частного сектора на чистое топливо", "scope": "district", "cost": 25, "lag_quarters": 3, "effects": {"E2": 14, "C1": 4}},
+    {"id": "M6", "direction": "environment", "name_ru": "Городская программа озеленения и ветрозащитных полос", "scope": "city", "cost": 20, "lag_quarters": 4, "effects": {"E1": 5, "E2": 3}},
+    {"id": "M7", "direction": "social", "name_ru": "Школа + детсад (модульное строительство)", "scope": "district", "cost": 24, "lag_quarters": 3, "effects": {"S1": 16}},
+    {"id": "M8", "direction": "social", "name_ru": "Центр семейного здоровья / поликлиника", "scope": "district", "cost": 20, "lag_quarters": 3, "effects": {"S2": 14}},
+    {"id": "M9", "direction": "social", "name_ru": "Дворовые спорт-хабы", "scope": "district", "cost": 10, "lag_quarters": 1, "effects": {"S1": 3, "S2": 3, "B1": 3}},
+    {"id": "M10", "direction": "safety", "name_ru": "Освещение и камеры (расширение Safe City)", "scope": "district", "cost": 12, "lag_quarters": 1, "effects": {"B1": 12, "B2": 2}},
+    {"id": "M11", "direction": "safety", "name_ru": "Безопасные переходы и школьные зоны", "scope": "district", "cost": 10, "lag_quarters": 1, "effects": {"B2": 12, "T1": -2}},
+    {"id": "M12", "direction": "services", "name_ru": "Единая цифровая платформа обращений", "scope": "city", "cost": 14, "lag_quarters": 1, "effects": {"C2": 5}},
+    {"id": "M13", "direction": "services", "name_ru": "Модернизация тепло- и водосетей", "scope": "district", "cost": 28, "lag_quarters": 4, "effects": {"C1": 18, "E2": 2}},
+    {"id": "M14", "direction": "services", "name_ru": "Аварийные бригады ЖКХ + раннее оповещение", "scope": "city", "cost": 16, "lag_quarters": 1, "effects": {"C1": 5, "C2": 2}}
+  ],
+  "synergies": [
+    {"id": "M1+M2", "initiative_ids": ["M1", "M2"], "target_from": "M1", "effects": {"T1": 2}},
+    {"id": "M10+M12", "initiative_ids": ["M10", "M12"], "target_from": "M10", "effects": {"B1": 2}},
+    {"id": "M5+M6", "initiative_ids": ["M5", "M6"], "target_from": "M5", "effects": {"E2": 2}}
+  ],
+  "incompatibilities": [
+    {"initiative_ids": ["M1", "M3"], "scope": "global"},
+    {"initiative_ids": ["M4", "M7"], "scope": "same_district"},
+    {"initiative_ids": ["M5", "M13"], "scope": "same_district"}
+  ]
+}

@@ -18,11 +18,11 @@ The first implementation slice may combine live client-side hints with server va
 ```json
 {
   "decisions": [
-    {"initiative_id": "M7", "district_id": "nura"},
-    {"initiative_id": "M8", "district_id": "nura"},
-    {"initiative_id": "M10", "district_id": "nura"},
-    {"initiative_id": "M12", "district_id": null},
-    {"initiative_id": "M5", "district_id": "saryarka"}
+    {"initiative_id": "M7", "scope": "district", "district_id": "nura"},
+    {"initiative_id": "M8", "scope": "district", "district_id": "nura"},
+    {"initiative_id": "M10", "scope": "district", "district_id": "nura"},
+    {"initiative_id": "M12", "scope": "city", "district_id": null},
+    {"initiative_id": "M5", "scope": "district", "district_id": "saryarka"}
   ]
 }
 ```
@@ -30,7 +30,10 @@ The first implementation slice may combine live client-side hints with server va
 Rules:
 
 - `decisions` contains exactly five unique initiative IDs for simulation; validation may accept a partial draft.
-- `district_id` is required for district-scoped initiatives and must be `null` or omitted for city-scoped initiatives.
+- `scope` is required and must be either `city` or `district`.
+- An initiative is eligible only for the `scope` declared on its catalog record.
+- `district_id` is required when `scope` is `district` and must be `null` or omitted
+  when `scope` is `city`.
 - Unknown fields and IDs are rejected rather than silently ignored.
 - Decision order has no effect.
 
@@ -82,6 +85,8 @@ Stable violation codes for v1:
 - `WRONG_DECISION_COUNT`
 - `DUPLICATE_INITIATIVE`
 - `UNKNOWN_INITIATIVE`
+- `INVALID_SCOPE` (defensive service validation; unsupported API values fail schema validation)
+- `SCOPE_NOT_ALLOWED`
 - `DISTRICT_REQUIRED`
 - `DISTRICT_NOT_ALLOWED`
 - `UNKNOWN_DISTRICT`
@@ -95,7 +100,7 @@ Invalid scenarios return HTTP 422 with the same validation object under `detail`
 
 ```json
 {
-  "scenario_id": 1,
+  "scenario_id": null,
   "data_mode": "SAMPLE",
   "dataset_version": "2026-09-23",
   "total_cost": 95,
@@ -119,6 +124,9 @@ Invalid scenarios return HTTP 422 with the same validation object under `detail`
 ```
 
 `district_results` includes before/after district scores and each indicator value. `indicator_deltas` and `initiative_contributions` make the explanation auditable. Numeric fields come only from deterministic code.
+
+`scenario_id` is `null` in the current backend slice. It becomes an integer when
+scenario persistence is implemented; persistence is not required for scoring.
 
 ## Error behavior
 

@@ -5,7 +5,7 @@ MeysQosAI is an AI-assisted city-management simulator for the HackAlem case
 five initiatives and receives a deterministic Astana Quality of Life Score with
 an AI explanation of impacts, risks, and trade-offs.
 
-Current status: **MVP contract and architecture defined; implementation is next.**
+Current status: **deterministic backend and the map-centered scenario builder are implemented; five-scenario comparison is next.**
 
 The existing hackathon starter provides:
 
@@ -37,7 +37,10 @@ explains structured results and never invents effects or scores. See
 [`docs/problem.md`](docs/problem.md), [`docs/architecture.md`](docs/architecture.md),
 and [`docs/api.md`](docs/api.md).
 
-## Run the starter
+The working product and UX priorities are captured in
+[`docs/master-implementation-prompt.md`](docs/master-implementation-prompt.md).
+
+## Run the application
 
 Terminal 1:
 
@@ -75,8 +78,23 @@ scripts/          Repeatable setup and health checks
 skills/           Reusable Codex hackathon workflows
 ```
 
-The first implementation slice is the deterministic simulator service plus tests
-for the published baseline and example scenario, exposed through
-`GET /api/simulator` and `POST /api/scenarios/simulate`.
+The backend exposes the full catalog through `GET /api/simulator`, validates drafts
+through `POST /api/scenarios/validate`, and calculates valid scenarios through
+`POST /api/scenarios/simulate`. The published example calculates to `56.5431`
+from an exact baseline of `52.5577` (displayed as 56.5 and 52.56).
+
+The Russian-language frontend provides five locally persisted scenario tabs, an
+interactive OpenStreetMap view with published Astana district geometry, visible
+city and district indicators, immediate budget feedback, citywide/district impact
+highlighting, and calculated scenario results. Five mapped districts are connected
+to the synthetic simulator; Saraishyk is retained as geographic context and clearly
+marked as outside the current model. The OSM tiles require an internet connection,
+while the district GeoJSON and the generated Astana hero image are bundled locally.
+
+Map attribution and provenance are displayed in the interface. The geometry was
+adapted from the Astana Aqua Ops baseline and points to the Astana architecture GIS
+service; its publication date, current administrative accuracy, and reuse license
+have not been independently verified, so it must not be presented as official or
+current municipal boundary data.
 
 See [docs/deployment.md](docs/deployment.md) when the organizer's hosting constraints are known.
