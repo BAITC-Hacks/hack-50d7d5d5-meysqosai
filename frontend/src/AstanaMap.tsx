@@ -22,22 +22,28 @@ const SOURCE_TO_MODEL_ID: Record<string, string> = {
 };
 
 const DEFAULT_STYLE: L.PathOptions = {
-  color: "#176f82",
-  weight: 2,
-  fillColor: "#37b8c2",
-  fillOpacity: 0.2,
+  color: "#287d89",
+  weight: 1.5,
+  fillColor: "#62c5c4",
+  fillOpacity: 0.18,
 };
 const AFFECTED_STYLE: L.PathOptions = {
   color: "#007c70",
-  weight: 3,
+  weight: 2.5,
   fillColor: "#55cdbc",
-  fillOpacity: 0.48,
+  fillOpacity: 0.42,
+};
+const HOVER_STYLE: L.PathOptions = {
+  color: "#075d69",
+  weight: 2.5,
+  fillColor: "#8ddbd3",
+  fillOpacity: 0.52,
 };
 const SELECTED_STYLE: L.PathOptions = {
-  color: "#7a4c00",
-  weight: 4,
-  fillColor: "#ffc95c",
-  fillOpacity: 0.62,
+  color: "#8a5800",
+  weight: 3.5,
+  fillColor: "#ffd16f",
+  fillOpacity: 0.68,
 };
 const CONTEXT_STYLE: L.PathOptions = {
   color: "#83939b",
@@ -65,6 +71,7 @@ function validateGeoJSON(value: unknown): FeatureCollection<Geometry, DistrictPr
 function applyLayerStyles(
   layers: Map<string, Path>,
   selectedDistrictId: string,
+  hoveredDistrictId: string | null,
   decisions: Decision[],
   initiatives: Map<string, Initiative>,
 ) {
@@ -78,10 +85,18 @@ function applyLayerStyles(
     const style =
       districtId === selectedDistrictId
         ? SELECTED_STYLE
+        : districtId === hoveredDistrictId
+          ? HOVER_STYLE
         : citywide || affectedDistricts.has(districtId)
           ? AFFECTED_STYLE
           : DEFAULT_STYLE;
     layer.setStyle(style);
+    const label = layer.getTooltip()?.getElement();
+    label?.classList.toggle("is-selected", districtId === selectedDistrictId);
+    label?.classList.toggle("is-hovered", districtId === hoveredDistrictId);
+    if (districtId === selectedDistrictId) {
+      layer.bringToFront();
+    }
   }
 }
 
@@ -104,6 +119,7 @@ export default function AstanaMap({
   const layersRef = useRef(new Map<string, Path>());
   const selectRef = useRef(onSelectDistrict);
   const selectedRef = useRef(selectedDistrictId);
+  const hoveredRef = useRef<string | null>(null);
   const decisionsRef = useRef(decisions);
   const initiativesRef = useRef(initiatives);
   const [status, setStatus] = useState("Загружаем OpenStreetMap и границы районов…");
@@ -168,14 +184,55 @@ export default function AstanaMap({
             const sourceId = feature.properties.district_id;
             const modelId = SOURCE_TO_MODEL_ID[sourceId];
             const displayName = districtById.get(modelId)?.name_ru ?? feature.properties.name_ru;
-            layer.bindTooltip(
-              modelId ? displayName : `${displayName} • вне текущей синтетической модели`,
-              { sticky: true },
-            );
+            layer.bindTooltip(displayName, {
+              permanent: true,
+              direction: "center",
+              className: `district-map-label${modelId ? "" : " is-context"}`,
+              opacity: 1,
+            });
             if (layer instanceof L.Path && modelId) {
               districtLayers.set(modelId, layer);
-              layer.on("click", () => selectRef.current(modelId));
-              layer.getElement()?.setAttribute("role", "button");
+              const refresh = () =>
+                applyLayerStyles(
+                  districtLayers,
+                  selectedRef.current,
+                  hoveredRef.current,
+                  decisionsRef.current,
+                  initiativesRef.current,
+                );
+              layer.on({
+                click: () => selectRef.current(modelId),
+                mouseover: () => {
+                  hoveredRef.current = modelId;
+                  refresh();
+                },
+                mouseout: () => {
+                  hoveredRef.current = null;
+                  refresh();
+                },
+                add: () => {
+                  const element = layer.getElement();
+                  if (!element) return;
+                  element.setAttribute("role", "button");
+                  element.setAttribute("tabindex", "0");
+                  element.setAttribute("aria-label", `Выбрать район ${displayName}`);
+                  element.addEventListener("click", () => selectRef.current(modelId));
+                  element.addEventListener("focus", () => {
+                    hoveredRef.current = modelId;
+                    refresh();
+                  });
+                  element.addEventListener("blur", () => {
+                    hoveredRef.current = null;
+                    refresh();
+                  });
+                  element.addEventListener("keydown", (event) => {
+                    const keyboardEvent = event as KeyboardEvent;
+                    if (keyboardEvent.key !== "Enter" && keyboardEvent.key !== " ") return;
+                    event.preventDefault();
+                    selectRef.current(modelId);
+                  });
+                },
+              });
             }
           },
         }).addTo(map);
@@ -183,6 +240,7 @@ export default function AstanaMap({
         applyLayerStyles(
           districtLayers,
           selectedRef.current,
+          hoveredRef.current,
           decisionsRef.current,
           initiativesRef.current,
         );
@@ -208,7 +266,13 @@ export default function AstanaMap({
   }, [districts]);
 
   useEffect(() => {
-    applyLayerStyles(layersRef.current, selectedDistrictId, decisions, initiatives);
+    applyLayerStyles(
+      layersRef.current,
+      selectedDistrictId,
+      hoveredRef.current,
+      decisions,
+      initiatives,
+    );
   }, [decisions, initiatives, selectedDistrictId]);
 
   const selectedName = districts.find((district) => district.id === selectedDistrictId)?.name_ru;
@@ -219,8 +283,8 @@ export default function AstanaMap({
   return (
     <div className="osm-map-shell">
       <div className="map-caption">
-        <span>Интерактивная карта Астаны</span>
-        <small>OSM-подложка • опубликованная геометрия, актуальность границ не проверена</small>
+        <span><i aria-hidden="true" /> Интерактивная карта</span>
+        <small>Наведите или выберите район</small>
       </div>
       {citywideCount > 0 && (
         <div className="citywide-banner">Городских программ выбрано: {citywideCount}</div>
@@ -231,7 +295,10 @@ export default function AstanaMap({
         role="region"
         aria-label="Интерактивная карта районов Астаны"
       />
-      <div className="osm-map-status" role="status">{status}</div>
+      <div className="osm-map-status" role="status">
+        <span>{status}</span>
+        <strong aria-live="polite">Выбран: {selectedName}</strong>
+      </div>
       <div className="map-legend">
         <span><i className="legend-swatch selected" /> цель: {selectedName}</span>
         <span><i className="legend-swatch affected" /> получает эффект</span>

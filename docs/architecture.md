@@ -103,6 +103,15 @@ No personal data is stored. A reset may clear demo scenarios without affecting t
 - **Resilience:** if OSM tiles fail, the locally bundled polygons and district selection remain available.
 - **Rollback:** restore a non-geographic diagram if the geometry source or right to redistribute cannot be confirmed before submission.
 
+### 2026-09-23 — Keep Leaflet/OSM instead of switching to 2GIS for presentation
+
+- **Availability:** 2GIS MapGL JS is an active, documented WebGL map library with React support, GeoJSON sources, styling, and hover examples. It would support the district interaction technically.
+- **Access and free tier:** MapGL initialization requires a 2GIS access key for Map Tiles API. The free option is a demo key valid for one month, currently limited to 500,000 Map Tiles requests; normal subscriptions are billed by tile request. The published entry package is currently 8,000 RUB per billing month for 100,000 Map Tiles units.
+- **Attribution and licensing:** 2GIS documentation says its copyright control must always remain visible and unobstructed. Use is also governed by the 2GIS license and services agreements; map fragments require source attribution and an active 2GIS link.
+- **Decision:** retain the existing Leaflet/OpenStreetMap implementation for the hackathon. It needs no new account, key, paid plan, provider SDK, or secret-handling path, and its locally bundled district polygons remain interactive if remote tiles fail. A basemap swap would not improve the simulator's core decision flow enough to justify those demo-day dependencies.
+- **Revisit when:** the project needs 2GIS-specific search, routing, rich building data, or a sponsor-provided production subscription—not for visual polish alone.
+- **Authoritative sources (reviewed 2026-09-23):** [2GIS MapGL getting started](https://docs.2gis.com/mapgl/start/first-steps), [API Platform FAQ](https://docs.2gis.com/en/api-platform), [Map Tiles API](https://docs.2gis.com/en/maps/others/maptiles/overview), [pricing and limits](https://docs.2gis.com/en/platform-manager/subscription/pricing), [copyright controls](https://docs.2gis.com/en/mapgl/map/configuration/controls), and [2GIS license agreement](https://law.2gis.ru/licensing-agreement).
+
 ### 2026-09-23 — Use an original generated Astana hero image
 
 - **Reason:** the landing state must immediately communicate that the simulation is limited to Astana.

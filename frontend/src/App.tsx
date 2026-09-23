@@ -291,6 +291,18 @@ export default function App() {
 
   const selectedDistrict =
     catalog.districts.find((district) => district.id === selectedDistrictId) ?? catalog.districts[0];
+  const rankedDistrictIndicators = catalog.indicators
+    .map((indicator) => ({
+      ...indicator,
+      value: selectedDistrict.indicators[indicator.id],
+    }))
+    .sort((left, right) => left.value - right.value);
+  const districtAverage =
+    rankedDistrictIndicators.reduce((total, indicator) => total + indicator.value, 0) /
+    rankedDistrictIndicators.length;
+  const districtDecisionCount = activeScenario.decisions.filter(
+    (decision) => decision.district_id === selectedDistrict.id,
+  ).length;
   const selectedIds = new Set(activeScenario.decisions.map((decision) => decision.initiative_id));
   const spent = activeScenario.decisions.reduce(
     (total, decision) => total + (initiatives.get(decision.initiative_id)?.cost ?? 0),
@@ -483,9 +495,10 @@ export default function App() {
                 <div className="section-heading">
                   <div>
                     <p className="section-kicker">Контекст решения</p>
-                    <h3>Выберите район на схеме</h3>
+                    <h3>Районы Астаны</h3>
+                    <p className="section-subtitle">Выберите территорию, чтобы увидеть её профиль и направить районную инициативу.</p>
                   </div>
-                  <span className="target-pill">Цель: {selectedDistrict.name_ru}</span>
+                  <span className="map-mode-pill"><i aria-hidden="true" /> Выбор района</span>
                 </div>
                 <AstanaMap
                   districts={catalog.districts}
@@ -494,21 +507,47 @@ export default function App() {
                   decisions={activeScenario.decisions}
                   initiatives={initiatives}
                 />
-                <div className="district-context">
-                  <div>
-                    <p className="section-kicker">{selectedDistrict.name_ru}</p>
-                    <h4>{selectedDistrict.profile_ru}</h4>
+                <article className="district-summary" aria-live="polite">
+                  <div className="district-summary-copy">
+                    <span className="selection-marker" aria-hidden="true">✓</span>
+                    <div>
+                      <p className="section-kicker">Выбранный район</p>
+                      <h4>{selectedDistrict.name_ru}</h4>
+                      <p>{selectedDistrict.profile_ru}</p>
+                    </div>
                   </div>
-                  <div className="indicator-grid">
-                    {catalog.indicators.map((indicator) => (
-                      <span key={indicator.id}>
-                        <small>{indicator.id}</small>
-                        <strong>{selectedDistrict.indicators[indicator.id]}</strong>
-                        <em>{indicator.name_ru}</em>
-                      </span>
-                    ))}
+                  <div className="district-highlights" aria-label={`Краткий профиль района ${selectedDistrict.name_ru}`}>
+                    <span>
+                      <small>Доля населения</small>
+                      <strong>{Math.round(selectedDistrict.population_share * 100)}%</strong>
+                    </span>
+                    <span>
+                      <small>Среднее по метрикам</small>
+                      <strong>{districtAverage.toFixed(0)}</strong>
+                    </span>
+                    <span className="attention">
+                      <small>Точка внимания</small>
+                      <strong>{rankedDistrictIndicators[0].value}</strong>
+                      <em>{rankedDistrictIndicators[0].name_ru}</em>
+                    </span>
+                    <span className="decisions">
+                      <small>Решений здесь</small>
+                      <strong>{districtDecisionCount}</strong>
+                    </span>
                   </div>
-                </div>
+                  <details className="indicator-details">
+                    <summary>Все 10 показателей</summary>
+                    <div className="indicator-grid">
+                      {catalog.indicators.map((indicator) => (
+                        <span key={indicator.id}>
+                          <small>{indicator.id}</small>
+                          <strong>{selectedDistrict.indicators[indicator.id]}</strong>
+                          <em>{indicator.name_ru}</em>
+                        </span>
+                      ))}
+                    </div>
+                  </details>
+                </article>
               </section>
 
               <section className="initiatives-section">
