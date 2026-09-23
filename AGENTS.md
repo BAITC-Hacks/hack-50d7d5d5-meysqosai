@@ -31,3 +31,28 @@ This repository is optimized for a solo hackathon. Prefer the smallest reliable 
 - API smoke requests: use `requests.http` in VS Code or curl.
 
 For OpenAI product or API questions, use the configured `openaiDeveloperDocs` MCP server and official OpenAI documentation.
+
+## Organizer / AI tester handoff
+
+Run from the repository root. Follow README prerequisites, run `./scripts/setup.sh`
+and `./scripts/check.sh`, and explicitly use `AI_PROVIDER=mock` for a credential-free
+demo. Tests isolate configuration and use a temporary database. Use the 95-unit
+example in README / requests.http; expected score is 56.5431. Complete all five
+scenarios, submit, and check ties and invalid selections. A mock fallback is not
+proof that live credentials work. Do not request keys for deterministic testing.
+
+## Repository-local skills and prompt provenance
+
+Read the relevant skill completely before its workflow. These Markdown files can
+be used by any AI tester without Codex plugins:
+
+- `skills/shape-mvp/SKILL.md`: scope and architecture planning when needed.
+- `skills/implement-mvp-slice/SKILL.md`: small end-to-end implementation.
+- `skills/verify-debug/SKILL.md`: focused diagnosis and regression checks.
+- `skills/ship-hackathon/SKILL.md`: submission readiness and honest limitations.
+
+Implementation, verification and submission workflows guide project work; their
+presence does not imply every deployment or evaluation step is complete.
+`docs/master-implementation-prompt.md` is the planning brief. `ai/prompts.md` indexes
+runtime instructions in backend code. Never copy private chat history, keys or
+personal information into prompts or these files.

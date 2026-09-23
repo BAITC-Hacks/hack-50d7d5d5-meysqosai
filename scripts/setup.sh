@@ -15,7 +15,7 @@ fi
 
 backend/.venv/bin/python -m pip install --upgrade pip
 backend/.venv/bin/python -m pip install -e 'backend[dev]'
-npm --prefix frontend install
+npm --prefix frontend ci
 
 if [[ ! -f .env ]]; then
   cp .env.example .env

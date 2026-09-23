@@ -7,7 +7,7 @@ Synthetic fixture (districts, indicators, initiatives, rules)
         ↓
 React scenario builder → FastAPI validation/orchestration → deterministic simulator
         ↑                         ↓                         ↓
-live budget/rule hints     structured result          SQLite scenarios
+live budget/rule hints     structured result          browser-local drafts
         ↑                         ↓
         └──────── score, deltas, risks, explanation ← AI adapter/mock fallback
 
@@ -34,7 +34,7 @@ at least three directions. The existing individual API contracts are reused.
 - `backend/app/services/simulator.py`: deterministic validation and scoring; no network or LLM dependency.
 - `backend/app/services/ai.py`: explains a structured simulation result; never generates numeric metrics.
 - `backend/app/services/evidence.py`: searches an allowlist of official sources, normalizes claims, retrieves by selected direction, and generates source-bound advice.
-- `backend/app/database.py`: local notes plus the normalized evidence cache and refresh history.
+- `backend/app/database.py`: normalized evidence cache and refresh history.
 - `data/`: versioned synthetic fixture with visible `SAMPLE / DEMO DATA` metadata.
 - `docs/api.md`: shared frontend/backend contract.
 
@@ -75,21 +75,16 @@ The backend returns all actionable violations together when possible. Invalid sc
 
 ## Minimal data model
 
-The catalog and baseline are versioned JSON fixtures, not database rows. SQLite stores the official evidence cache and may later store user-created demo runs:
-
-```text
-scenario
-  id, created_at, dataset_version, total_cost, baseline_score,
-  final_score, score_delta, decisions_json, result_json, explanation
-```
-
-No personal data is stored. A reset may clear demo scenarios without affecting the versioned fixture.
+The catalog and baseline are versioned JSON fixtures, not database rows. SQLite stores
+`evidence_claims` and `evidence_syncs` only. Scenario drafts live in browser localStorage;
+there is no server-side scenario table or cross-device persistence. No personal data
+is required. Removed starter notes endpoints do not delete legacy local database tables.
 
 ## Official evidence and RAG
 
 The first RAG slice deliberately avoids a vector database. A manual refresh uses the OpenAI Responses API `web_search` tool with an allowlist (`gov.kz`, `stat.gov.kz`, `data.egov.kz`, `budget.egov.kz`, `rkastana.gov.kz`). The model returns structured, one-claim evidence cards. The backend rejects non-HTTPS and non-allowlisted URLs, deduplicates claims, and replaces the SQLite cache only after a successful research response.
 
-Each claim is classified as `plan`, `reported_output`, `reported_outcome`, `independent_statistic`, or `audit_issue`. This prevents a planned project from being presented as a proven outcome. Confidence and limitations are visible to the user. For a final scenario, deterministic retrieval selects cached claims matching the chosen directions; a second structured model call may write recommendations, but it may cite only supplied evidence IDs. A deterministic fallback produces the same API shape without network access.
+Each claim is classified as `plan`, `reported_output`, `reported_outcome`, `independent_statistic`, or `audit_issue`. Classification helps distinguish plans from outcomes but can be wrong. Confidence is displayed; full source limitations are available in the API. For a final scenario, deterministic retrieval selects cached claims matching the chosen directions; a second structured model call may write recommendations, but it may cite only supplied evidence IDs. A deterministic fallback produces the same API shape without network access. Neither schema nor citation validation proves the generated prose is factually correct.
 
 The two data domains stay separate:
 

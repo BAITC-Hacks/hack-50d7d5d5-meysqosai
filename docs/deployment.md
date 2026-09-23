@@ -19,7 +19,18 @@ SQLite is suitable only when the host provides a persistent disk and one applica
 - Install: `npm ci`
 - Build: `npm run build`
 - Output directory: `dist`
-- Route `/api` to the backend or configure an explicit API base URL before deployment.
+- Route `/api` on the frontend origin to the backend using the hosting reverse proxy.
+  The frontend uses relative API paths; no runtime API-base-URL setting is implemented.
+  `VITE_API_PROXY` is development-only. `npm run preview` alone is not a full deployment.
+
+## Current deployment limitations
+
+No public deployment is verified. Run from the repository root so the fixture and
+environment paths resolve. Use persistent writable storage for `DATA_PATH`, keep
+the versioned fixture available, and run one backend instance. `APP_ENV=production`
+does not enable authentication or rate limiting. Add access controls, TLS, request
+limits and provider-spend controls before exposing research or report endpoints.
+Do not put backend keys in frontend build variables. Restart after settings change.
 
 ## Release check
 

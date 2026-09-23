@@ -53,20 +53,3 @@ Content-Type: application/json
     {"initiative_id": "M5", "scope": "district", "district_id": "saryarka"}
   ]
 }
-
-### Create note
-POST {{baseUrl}}/api/notes
-Content-Type: application/json
-
-{
-  "title": "Permit backlog",
-  "body": "Residents wait seven days for triage."
-}
-
-### Mock or configured AI summary
-POST {{baseUrl}}/api/ai/summarize
-Content-Type: application/json
-
-{
-  "text": "Residents need a faster way to understand permit status updates."
-}
