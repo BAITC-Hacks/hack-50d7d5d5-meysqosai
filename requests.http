@@ -3,6 +3,37 @@
 ### Health
 GET {{baseUrl}}/api/health
 
+### Simulator parameters
+GET {{baseUrl}}/api/simulator
+
+### Validate the published example
+POST {{baseUrl}}/api/scenarios/validate
+Content-Type: application/json
+
+{
+  "decisions": [
+    {"initiative_id": "M7", "district_id": "nura"},
+    {"initiative_id": "M8", "district_id": "nura"},
+    {"initiative_id": "M10", "district_id": "nura"},
+    {"initiative_id": "M12", "district_id": null},
+    {"initiative_id": "M5", "district_id": "saryarka"}
+  ]
+}
+
+### Simulate the published example
+POST {{baseUrl}}/api/scenarios/simulate
+Content-Type: application/json
+
+{
+  "decisions": [
+    {"initiative_id": "M7", "district_id": "nura"},
+    {"initiative_id": "M8", "district_id": "nura"},
+    {"initiative_id": "M10", "district_id": "nura"},
+    {"initiative_id": "M12", "district_id": null},
+    {"initiative_id": "M5", "district_id": "saryarka"}
+  ]
+}
+
 ### Create note
 POST {{baseUrl}}/api/notes
 Content-Type: application/json

@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_env: str = "development"
     data_path: str = "data/app.db"
+    simulator_data_path: str = "data/simulator.json"
     frontend_origin: str = "http://localhost:5173"
     ai_provider: str = "mock"
     ai_model: str = "gpt-5-mini"

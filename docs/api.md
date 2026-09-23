@@ -95,7 +95,7 @@ Invalid scenarios return HTTP 422 with the same validation object under `detail`
 
 ```json
 {
-  "scenario_id": 1,
+  "scenario_id": null,
   "data_mode": "SAMPLE",
   "dataset_version": "2026-09-23",
   "total_cost": 95,
@@ -119,6 +119,9 @@ Invalid scenarios return HTTP 422 with the same validation object under `detail`
 ```
 
 `district_results` includes before/after district scores and each indicator value. `indicator_deltas` and `initiative_contributions` make the explanation auditable. Numeric fields come only from deterministic code.
+
+`scenario_id` is `null` in the current backend slice. It becomes an integer when
+scenario persistence is implemented; persistence is not required for scoring.
 
 ## Error behavior
 

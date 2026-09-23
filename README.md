@@ -5,7 +5,7 @@ MeysQosAI is an AI-assisted city-management simulator for the HackAlem case
 five initiatives and receives a deterministic Astana Quality of Life Score with
 an AI explanation of impacts, risks, and trade-offs.
 
-Current status: **MVP contract and architecture defined; implementation is next.**
+Current status: **deterministic backend simulator and API are implemented; scenario UI is next.**
 
 The existing hackathon starter provides:
 
@@ -37,7 +37,7 @@ explains structured results and never invents effects or scores. See
 [`docs/problem.md`](docs/problem.md), [`docs/architecture.md`](docs/architecture.md),
 and [`docs/api.md`](docs/api.md).
 
-## Run the starter
+## Run the application
 
 Terminal 1:
 
@@ -75,8 +75,9 @@ scripts/          Repeatable setup and health checks
 skills/           Reusable Codex hackathon workflows
 ```
 
-The first implementation slice is the deterministic simulator service plus tests
-for the published baseline and example scenario, exposed through
-`GET /api/simulator` and `POST /api/scenarios/simulate`.
+The backend exposes the full catalog through `GET /api/simulator`, validates drafts
+through `POST /api/scenarios/validate`, and calculates valid scenarios through
+`POST /api/scenarios/simulate`. The published example calculates to `56.5431`
+from an exact baseline of `52.5577` (displayed as 56.5 and 52.56).
 
 See [docs/deployment.md](docs/deployment.md) when the organizer's hosting constraints are known.
