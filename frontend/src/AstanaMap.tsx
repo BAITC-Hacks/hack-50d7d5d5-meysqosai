@@ -4,7 +4,7 @@ import type { Feature, FeatureCollection, Geometry } from "geojson";
 import "leaflet/dist/leaflet.css";
 
 type District = { id: string; name_ru: string };
-type Decision = { initiative_id: string; district_id: string | null };
+type Decision = { initiative_id: string; scope: "city" | "district"; district_id: string | null };
 type Initiative = { id: string; scope: "city" | "district" };
 
 type DistrictProperties = {
@@ -45,6 +45,12 @@ const SELECTED_STYLE: L.PathOptions = {
   fillColor: "#ffd16f",
   fillOpacity: 0.68,
 };
+const CITY_TARGET_STYLE: L.PathOptions = {
+  color: "#006f75",
+  weight: 2.5,
+  fillColor: "#4bc3bd",
+  fillOpacity: 0.46,
+};
 const CONTEXT_STYLE: L.PathOptions = {
   color: "#83939b",
   weight: 1.5,
@@ -71,6 +77,7 @@ function validateGeoJSON(value: unknown): FeatureCollection<Geometry, DistrictPr
 function applyLayerStyles(
   layers: Map<string, Path>,
   selectedDistrictId: string,
+  selectionScope: "city" | "district",
   hoveredDistrictId: string | null,
   decisions: Decision[],
   initiatives: Map<string, Initiative>,
@@ -83,7 +90,9 @@ function applyLayerStyles(
   );
   for (const [districtId, layer] of layers) {
     const style =
-      districtId === selectedDistrictId
+      selectionScope === "city"
+        ? districtId === hoveredDistrictId ? HOVER_STYLE : CITY_TARGET_STYLE
+        : districtId === selectedDistrictId
         ? SELECTED_STYLE
         : districtId === hoveredDistrictId
           ? HOVER_STYLE
@@ -92,9 +101,12 @@ function applyLayerStyles(
           : DEFAULT_STYLE;
     layer.setStyle(style);
     const label = layer.getTooltip()?.getElement();
-    label?.classList.toggle("is-selected", districtId === selectedDistrictId);
+    label?.classList.toggle(
+      "is-selected",
+      selectionScope === "district" && districtId === selectedDistrictId,
+    );
     label?.classList.toggle("is-hovered", districtId === hoveredDistrictId);
-    if (districtId === selectedDistrictId) {
+    if (selectionScope === "district" && districtId === selectedDistrictId) {
       layer.bringToFront();
     }
   }
@@ -103,12 +115,14 @@ function applyLayerStyles(
 export default function AstanaMap({
   districts,
   selectedDistrictId,
+  selectionScope,
   onSelectDistrict,
   decisions,
   initiatives,
 }: {
   districts: District[];
   selectedDistrictId: string;
+  selectionScope: "city" | "district";
   onSelectDistrict: (id: string) => void;
   decisions: Decision[];
   initiatives: Map<string, Initiative>;
@@ -119,6 +133,7 @@ export default function AstanaMap({
   const layersRef = useRef(new Map<string, Path>());
   const selectRef = useRef(onSelectDistrict);
   const selectedRef = useRef(selectedDistrictId);
+  const selectionScopeRef = useRef(selectionScope);
   const hoveredRef = useRef<string | null>(null);
   const decisionsRef = useRef(decisions);
   const initiativesRef = useRef(initiatives);
@@ -126,6 +141,7 @@ export default function AstanaMap({
   const [failed, setFailed] = useState(false);
 
   selectedRef.current = selectedDistrictId;
+  selectionScopeRef.current = selectionScope;
   decisionsRef.current = decisions;
   initiativesRef.current = initiatives;
 
@@ -196,6 +212,7 @@ export default function AstanaMap({
                 applyLayerStyles(
                   districtLayers,
                   selectedRef.current,
+                  selectionScopeRef.current,
                   hoveredRef.current,
                   decisionsRef.current,
                   initiativesRef.current,
@@ -240,6 +257,7 @@ export default function AstanaMap({
         applyLayerStyles(
           districtLayers,
           selectedRef.current,
+          selectionScopeRef.current,
           hoveredRef.current,
           decisionsRef.current,
           initiativesRef.current,
@@ -269,11 +287,12 @@ export default function AstanaMap({
     applyLayerStyles(
       layersRef.current,
       selectedDistrictId,
+      selectionScope,
       hoveredRef.current,
       decisions,
       initiatives,
     );
-  }, [decisions, initiatives, selectedDistrictId]);
+  }, [decisions, initiatives, selectedDistrictId, selectionScope]);
 
   const selectedName = districts.find((district) => district.id === selectedDistrictId)?.name_ru;
   const citywideCount = decisions.filter(
@@ -297,10 +316,10 @@ export default function AstanaMap({
       />
       <div className="osm-map-status" role="status">
         <span>{status}</span>
-        <strong aria-live="polite">Выбран: {selectedName}</strong>
+        <strong aria-live="polite">Выбрано: {selectionScope === "city" ? "весь город" : selectedName}</strong>
       </div>
       <div className="map-legend">
-        <span><i className="legend-swatch selected" /> цель: {selectedName}</span>
+        <span><i className="legend-swatch selected" /> цель: {selectionScope === "city" ? "весь город" : selectedName}</span>
         <span><i className="legend-swatch affected" /> получает эффект</span>
         <span><i className="legend-swatch context" /> район вне модели</span>
       </div>

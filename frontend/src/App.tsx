@@ -40,7 +40,11 @@ type Catalog = {
   districts: District[];
   initiatives: Initiative[];
 };
-type Decision = { initiative_id: string; district_id: string | null };
+type Decision = {
+  initiative_id: string;
+  scope: "city" | "district";
+  district_id: string | null;
+};
 type Scenario = { id: number; name: string; decisions: Decision[] };
 type Violation = { code: string; message: string; decision_indexes: number[] };
 type Validation = {
@@ -87,7 +91,14 @@ function restoreScenarios(): Scenario[] {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return defaultScenarios();
     const parsed = JSON.parse(saved) as Scenario[];
-    return parsed.length === 5 ? parsed : defaultScenarios();
+    if (parsed.length !== 5) return defaultScenarios();
+    return parsed.map((scenario) => ({
+      ...scenario,
+      decisions: scenario.decisions.map((decision) => ({
+        ...decision,
+        scope: decision.scope ?? (decision.district_id === null ? "city" : "district"),
+      })),
+    }));
   } catch {
     return defaultScenarios();
   }
@@ -227,6 +238,7 @@ export default function App() {
   const [scenarios, setScenarios] = useState<Scenario[]>(restoreScenarios);
   const [activeIndex, setActiveIndex] = useState(0);
   const [selectedDistrictId, setSelectedDistrictId] = useState("nura");
+  const [targetScope, setTargetScope] = useState<"city" | "district">("district");
   const [validation, setValidation] = useState<Validation | null>(null);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [error, setError] = useState("");
@@ -303,6 +315,9 @@ export default function App() {
   const districtDecisionCount = activeScenario.decisions.filter(
     (decision) => decision.district_id === selectedDistrict.id,
   ).length;
+  const cityDecisionCount = activeScenario.decisions.filter(
+    (decision) => decision.scope === "city",
+  ).length;
   const selectedIds = new Set(activeScenario.decisions.map((decision) => decision.initiative_id));
   const spent = activeScenario.decisions.reduce(
     (total, decision) => total + (initiatives.get(decision.initiative_id)?.cost ?? 0),
@@ -315,6 +330,14 @@ export default function App() {
 
   function addInitiative(initiative: Initiative) {
     setNotice("");
+    if (initiative.scope !== targetScope) {
+      setNotice(
+        targetScope === "city"
+          ? "Эта мера применяется к отдельному району. Выберите район на карте."
+          : "Это общегородская мера. Выберите карточку «Весь город» справа от карты.",
+      );
+      return;
+    }
     if (selectedIds.has(initiative.id)) {
       setNotice("Эта инициатива уже добавлена в сценарий.");
       return;
@@ -338,7 +361,8 @@ export default function App() {
     }
     const decision: Decision = {
       initiative_id: initiative.id,
-      district_id: initiative.scope === "city" ? null : selectedDistrictId,
+      scope: targetScope,
+      district_id: targetScope === "city" ? null : selectedDistrictId,
     };
     updateActive((scenario) => ({ ...scenario, decisions: [...scenario.decisions, decision] }));
   }
@@ -498,15 +522,47 @@ export default function App() {
                     <h3>Районы Астаны</h3>
                     <p className="section-subtitle">Выберите территорию, чтобы увидеть её профиль и направить районную инициативу.</p>
                   </div>
-                  <span className="map-mode-pill"><i aria-hidden="true" /> Выбор района</span>
+                  <span className="map-mode-pill"><i aria-hidden="true" /> {targetScope === "city" ? "Весь город" : "Выбор района"}</span>
                 </div>
-                <AstanaMap
-                  districts={catalog.districts}
-                  selectedDistrictId={selectedDistrictId}
-                  onSelectDistrict={setSelectedDistrictId}
-                  decisions={activeScenario.decisions}
-                  initiatives={initiatives}
-                />
+                <div className="map-target-layout">
+                  <AstanaMap
+                    districts={catalog.districts}
+                    selectedDistrictId={selectedDistrictId}
+                    selectionScope={targetScope}
+                    onSelectDistrict={(districtId) => {
+                      setSelectedDistrictId(districtId);
+                      setTargetScope("district");
+                    }}
+                    decisions={activeScenario.decisions}
+                    initiatives={initiatives}
+                  />
+                  <aside className="target-switcher" aria-label="Область применения решения">
+                    <p className="section-kicker">Область решения</p>
+                    <button
+                      type="button"
+                      className={targetScope === "city" ? "active city-target" : "city-target"}
+                      aria-pressed={targetScope === "city"}
+                      onClick={() => setTargetScope("city")}
+                    >
+                      <span className="target-icon" aria-hidden="true">◎</span>
+                      <strong>Весь город</strong>
+                      <small>Эффект сразу для всех пяти районов</small>
+                      <em>{cityDecisionCount} решений выбрано</em>
+                    </button>
+                    <button
+                      type="button"
+                      className={targetScope === "district" ? "active district-target" : "district-target"}
+                      aria-pressed={targetScope === "district"}
+                      onClick={() => setTargetScope("district")}
+                    >
+                      <span className="target-icon" aria-hidden="true">⌖</span>
+                      <strong>{selectedDistrict.name_ru}</strong>
+                      <small>Точечный эффект в выбранном районе</small>
+                      <em>{districtDecisionCount} решений выбрано</em>
+                    </button>
+                    <p className="target-help">Клик по району на карте автоматически переключает цель на район.</p>
+                  </aside>
+                </div>
                 <article className="district-summary" aria-live="polite">
                   <div className="district-summary-copy">
                     <span className="selection-marker" aria-hidden="true">✓</span>
@@ -574,9 +630,10 @@ export default function App() {
                       <div className="initiative-grid">
                         {directionInitiatives.map((initiative) => {
                           const selected = selectedIds.has(initiative.id);
+                          const availableForTarget = initiative.scope === targetScope;
                           const negativeEffects = Object.entries(initiative.effects).filter(([, value]) => value < 0);
                           return (
-                            <article className={`initiative-card ${selected ? "selected" : ""}`} key={initiative.id}>
+                            <article className={`initiative-card ${selected ? "selected" : ""} ${!selected && !availableForTarget ? "scope-muted" : ""}`} key={initiative.id}>
                               <div className="initiative-meta">
                                 <span>{initiative.id}</span>
                                 <span className={initiative.scope === "city" ? "scope city" : "scope district"}>
@@ -599,9 +656,10 @@ export default function App() {
                                 <strong>{initiative.cost} <small>coin</small></strong>
                                 <button
                                   className={selected ? "selected-button" : "add-button"}
+                                  disabled={!selected && !availableForTarget}
                                   onClick={() => selected ? removeInitiative(initiative.id) : addInitiative(initiative)}
                                 >
-                                  {selected ? "Убрать" : "Добавить"}
+                                  {selected ? "Убрать" : availableForTarget ? "Добавить" : initiative.scope === "city" ? "Выберите город" : "Выберите район"}
                                 </button>
                               </div>
                             </article>

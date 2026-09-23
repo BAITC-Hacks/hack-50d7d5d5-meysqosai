@@ -130,3 +130,6 @@ No personal data is stored. A reset may clear demo scenarios without affecting t
   catalog's scope as the eligibility rule, and reject mismatches before simulation.
 - **Trade-off:** this intentionally breaks the previous request shape; the separate frontend GIS
   redesign must send the explicit field. Costs, effects, and deterministic scoring are unchanged.
+- **UI contract:** the map workspace exposes two explicit targets: `Весь город` and the currently
+  selected district. Initiative cards that do not support the active target remain visible for
+  comparison but cannot be added; clicking a district switches the target back to `district`.
