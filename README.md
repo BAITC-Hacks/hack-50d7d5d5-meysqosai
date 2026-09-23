@@ -5,7 +5,8 @@ MeysQosAI is an AI-assisted city-management simulator for the HackAlem case
 five initiatives and receives a deterministic Astana Quality of Life Score with
 an AI explanation of impacts, risks, and trade-offs.
 
-Current status: **deterministic backend and the map-centered scenario builder are implemented; five-scenario comparison is next.**
+Current status: **five sequential scenarios, explicit submission, comparison-first AI report,
+official-source advice, and Russian-language results dialog are implemented.**
 
 The existing hackathon starter provides:
 

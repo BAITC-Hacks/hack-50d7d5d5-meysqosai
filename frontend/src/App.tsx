@@ -28,6 +28,24 @@ type Initiative = {
   lag_quarters: number;
   effects: Record<string, number>;
 };
+type ContextIndicator = {
+  indicator_id: string;
+  name_ru: string;
+  value: number;
+};
+type CityNeed = ContextIndicator & {
+  district_id: string;
+  district_name_ru: string;
+  severity: "critical" | "attention";
+};
+type DistrictContext = {
+  district_id: string;
+  name_ru: string;
+  profile_ru: string;
+  score: number;
+  priority_indicators: ContextIndicator[];
+  strong_indicators: ContextIndicator[];
+};
 type Catalog = {
   data_mode: "SAMPLE";
   dataset_version: string;
@@ -36,6 +54,18 @@ type Catalog = {
   horizon_quarters: number;
   max_per_direction: number;
   baseline_score: number;
+  city_context: {
+    mission_ru: string;
+    data_disclosure_ru: string;
+    goals: string[];
+    baseline_snapshot: {
+      critical_count: number;
+      weakest_district: { name_ru: string; score: number };
+      direction_scores: { direction_id: string; name_ru: string; value: number }[];
+      districts: DistrictContext[];
+      city_needs: CityNeed[];
+    };
+  };
   directions: Direction[];
   indicators: Indicator[];
   districts: District[];
@@ -71,10 +101,70 @@ type SimulationResult = Validation & {
   activated_synergies: string[];
   explanation: {
     summary: string;
+    verdict: "improved" | "mixed" | "declined";
     strengths: string[];
     risks: string[];
+    tradeoffs: string[];
+    resource_assessment: string;
     recommendations: string[];
   };
+  ai_provider: string;
+  report_context: {
+    selected_decisions: {
+      initiative_id: string;
+      name_ru: string;
+      direction_name_ru: string;
+      target_name_ru: string;
+      cost: number;
+      lag_quarters: number;
+      realized_fraction: number;
+      realized_effects: {
+        indicator_id: string;
+        indicator_name_ru: string;
+        delta: number;
+      }[];
+      rationale_ru: string;
+    }[];
+  };
+};
+type EvidenceStatus = {
+  status: "empty" | "ready" | "cached" | "error" | "unavailable";
+  provider: string | null;
+  item_count: number;
+  error_code: string | null;
+  updated_at: string | null;
+};
+type Comparison = { winner_indexes: number[]; best_score: number; provider: string; conclusion: string; reasons: string[]; limitations: string[] };
+type EvidenceItem = {
+  id: number;
+  title: string;
+  url: string;
+  publisher: string;
+  published_at: string;
+  direction: string;
+  claim_type: "plan" | "reported_output" | "reported_outcome" | "independent_statistic" | "audit_issue";
+  claim: string;
+  confidence: "high" | "medium" | "low";
+  limitations: string[];
+};
+type EvidenceAdvice = {
+  data_mode: "MIXED";
+  disclosure: string;
+  evidence_status: EvidenceStatus;
+  advice_provider: string;
+  city_digest: {
+    proven_patterns: string[];
+    caution_signals: string[];
+    evidence_gaps: string[];
+  };
+  recommendations: {
+    initiative_id: string;
+    assessment: "supported" | "promising_with_conditions" | "caution" | "not_recommended" | "insufficient_evidence";
+    confidence: "high" | "medium" | "low";
+    rationale: string;
+    conditions: string[];
+    evidence: EvidenceItem[];
+  }[];
 };
 
 const STORAGE_KEY = "meysqosai-scenarios-v1";
@@ -146,6 +236,45 @@ function quarterLabel(value: number): string {
   return value === 1 ? "1-го квартала" : `${value}-го квартала`;
 }
 
+const assessmentLabels: Record<EvidenceAdvice["recommendations"][number]["assessment"], string> = {
+  supported: "Подтверждено",
+  promising_with_conditions: "Перспективно с условиями",
+  caution: "Нужна осторожность",
+  not_recommended: "Не рекомендуется",
+  insufficient_evidence: "Недостаточно данных",
+};
+
+const claimTypeLabels: Record<EvidenceItem["claim_type"], string> = {
+  plan: "План",
+  reported_output: "Выполненная работа",
+  reported_outcome: "Заявленный результат",
+  independent_statistic: "Независимая статистика",
+  audit_issue: "Аудиторский риск",
+};
+
+const confidenceLabels = { high: "высокая", medium: "средняя", low: "низкая" };
+const evidenceStatusLabels = { empty: "нет источников", ready: "источники обновлены", cached: "сохранённые источники", error: "ошибка обновления", unavailable: "источники недоступны" };
+function reportProviderLabel(provider: string): string {
+  return provider === "openai" ? "ИИ-анализ" : provider === "mock-fallback" ? "резервный отчёт по расчётам" : "отчёт по расчётам";
+}
+
+function violationLabel(item: Violation): string {
+  const labels: Record<string, string> = {
+    WRONG_DECISION_COUNT: "Выберите ровно пять мероприятий.",
+    DUPLICATE_INITIATIVE: "Одно мероприятие нельзя выбирать дважды.",
+    UNKNOWN_INITIATIVE: "Неизвестное мероприятие. Выберите его из каталога.",
+    INVALID_SCOPE: "Укажите область применения: город или район.",
+    SCOPE_NOT_ALLOWED: "Область применения не соответствует выбранному мероприятию.",
+    DISTRICT_REQUIRED: "Для районного мероприятия обязательно выберите район.",
+    DISTRICT_NOT_ALLOWED: "Для общегородского мероприятия район не указывается.",
+    UNKNOWN_DISTRICT: "Выберите район из списка доступных.",
+    BUDGET_EXCEEDED: "Стоимость выбранных мероприятий превышает бюджет 100 единиц.",
+    DIRECTION_LIMIT_EXCEEDED: "В одном направлении можно выбрать не более двух мероприятий.",
+    INCOMPATIBLE_INITIATIVES: `Несовместимые мероприятия: решения ${item.decision_indexes.map((index) => index + 1).join(" и ")}. Замените одно из них или проверьте выбранные районы.`,
+  };
+  return labels[item.code] ?? "Набор не прошёл проверку. Проверьте выбранные мероприятия.";
+}
+
 function BudgetPanel({
   catalog,
   scenario,
@@ -153,6 +282,8 @@ function BudgetPanel({
   validation,
   result,
   onRemove,
+  onComplete,
+  completeDisabled,
 }: {
   catalog: Catalog;
   scenario: Scenario;
@@ -160,6 +291,8 @@ function BudgetPanel({
   validation: Validation | null;
   result: SimulationResult | null;
   onRemove: (initiativeId: string) => void;
+  onComplete: () => void;
+  completeDisabled: boolean;
 }) {
   const spent = scenario.decisions.reduce(
     (total, decision) => total + (initiatives.get(decision.initiative_id)?.cost ?? 0),
@@ -235,13 +368,14 @@ function BudgetPanel({
         <span>Индекс качества жизни</span>
         <strong>{result ? result.final_score.toFixed(2) : catalog.baseline_score.toFixed(2)}</strong>
         <small>
-          {result ? `${result.score_delta >= 0 ? "+" : ""}${result.score_delta.toFixed(2)} к исходному значению` : "расчёт появится после 5 решений"}
+          {result ? `${result.score_delta >= 0 ? "+" : ""}${result.score_delta.toFixed(2)} к исходному значению` : "исходное значение · результаты после отправки всех сценариев"}
         </small>
       </div>
 
       {validation && validation.violations.filter((item) => item.code !== "WRONG_DECISION_COUNT").map((item) => (
-        <p className="validation-message" key={`${item.code}-${item.message}`}>{item.message}</p>
+        <p className="validation-message" key={`${item.code}-${item.message}`}>{violationLabel(item)}</p>
       ))}
+      <button className="primary-button budget-complete" disabled={completeDisabled} onClick={onComplete}><Icon name="check" size={16} /> Завершить сценарий</button>
     </aside>
   );
 }
@@ -254,6 +388,20 @@ export default function App() {
   const [targetScope, setTargetScope] = useState<"city" | "district">("district");
   const [validation, setValidation] = useState<Validation | null>(null);
   const [result, setResult] = useState<SimulationResult | null>(null);
+  const [completed, setCompleted] = useState<string[]>([]);
+  const [results, setResults] = useState<(SimulationResult | null)[]>([]);
+  const [comparison, setComparison] = useState<Comparison | null>(null);
+  const [reportIndex, setReportIndex] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [progress, setProgress] = useState("");
+  const [submitError, setSubmitError] = useState("");
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const submitLock = useRef(false);
+  const [evidenceStatus, setEvidenceStatus] = useState<EvidenceStatus | null>(null);
+  const [evidenceAdvice, setEvidenceAdvice] = useState<EvidenceAdvice | null>(null);
+  const [evidenceBusy, setEvidenceBusy] = useState(false);
+  const [evidenceError, setEvidenceError] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const plannerRef = useRef<HTMLElement>(null);
@@ -269,33 +417,57 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    api<EvidenceStatus>("/api/evidence/status")
+      .then(setEvidenceStatus)
+      .catch((reason: Error) => setEvidenceError(reason.message));
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
   }, [scenarios]);
 
   useEffect(() => {
     if (!catalog) return;
     const controller = new AbortController();
-    setResult(null);
+    setValidation(null);
+    setError("");
     api<Validation>("/api/scenarios/validate", {
       method: "POST",
       body: JSON.stringify({ decisions: activeScenario.decisions }),
       signal: controller.signal,
     })
-      .then(async (nextValidation) => {
-        setValidation(nextValidation);
-        if (!nextValidation.valid) return;
-        const simulation = await api<SimulationResult>("/api/scenarios/simulate", {
-          method: "POST",
-          body: JSON.stringify({ decisions: activeScenario.decisions }),
-          signal: controller.signal,
-        });
-        setResult(simulation);
-      })
+      .then(setValidation)
       .catch((reason: Error) => {
         if (reason.name !== "AbortError") setError(reason.message);
       });
     return () => controller.abort();
   }, [catalog, activeScenario.decisions]);
+
+  useEffect(() => {
+    if (!result || !evidenceStatus?.item_count) {
+      setEvidenceAdvice(null);
+      return;
+    }
+    const controller = new AbortController();
+    setEvidenceBusy(true);
+    setEvidenceError("");
+    api<EvidenceAdvice>("/api/scenarios/advise", {
+      method: "POST",
+      body: JSON.stringify({ decisions: scenarios[reportIndex].decisions }),
+      signal: controller.signal,
+    })
+      .then((nextAdvice) => {
+        setEvidenceAdvice(nextAdvice);
+        setEvidenceStatus(nextAdvice.evidence_status);
+      })
+      .catch((reason: Error) => {
+        if (reason.name !== "AbortError") setEvidenceError(reason.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setEvidenceBusy(false);
+      });
+    return () => controller.abort();
+  }, [result, evidenceStatus?.item_count, evidenceStatus?.updated_at, reportIndex, scenarios]);
 
   const initiatives = useMemo(
     () => new Map(catalog?.initiatives.map((item) => [item.id, item]) ?? []),
@@ -338,7 +510,90 @@ export default function App() {
   );
 
   function updateActive(updater: (scenario: Scenario) => Scenario) {
-    setScenarios((current) => current.map((scenario, index) => index === activeIndex ? updater(scenario) : scenario));
+    if (submitLock.current || confirming) return;
+    const next = updater(activeScenario);
+    if (next.decisions !== activeScenario.decisions) {
+      setCompleted((current) => current.slice(0, activeIndex));
+      setResults([]);
+      setResult(null);
+      setValidation(null);
+    }
+    setScenarios((current) => current.map((scenario, index) => index === activeIndex ? next : scenario));
+  }
+
+  const isCompleted = (index: number) => completed[index] === JSON.stringify(scenarios[index].decisions);
+  const allCompleted = scenarios.every((_, index) => isCompleted(index));
+
+  async function completeScenario() {
+    setConfirming(true);
+    setError("");
+    try {
+      const checked = await api<Validation>("/api/scenarios/validate", {
+        method: "POST", body: JSON.stringify({ decisions: activeScenario.decisions }),
+      });
+      setValidation(checked);
+      if (!checked.valid) return;
+      setCompleted((current) => {
+        const next = [...current];
+        next[activeIndex] = JSON.stringify(activeScenario.decisions);
+        return next;
+      });
+      if (activeIndex < scenarios.length - 1) {
+        setValidation(null);
+        setActiveIndex(activeIndex + 1);
+        plannerRef.current?.scrollIntoView({ behavior: "smooth" });
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Проверка не выполнена");
+    } finally { setConfirming(false); }
+  }
+
+  async function submitScenarios() {
+    if (!allCompleted || submitLock.current) return;
+    submitLock.current = true;
+    setSubmitting(true);
+    setSubmitError("");
+    setComparison(null);
+    setResult(null);
+    setResults([]);
+    dialogRef.current?.showModal();
+    try {
+      setProgress("Проверяем все пять сценариев…");
+      const checks = await Promise.all(scenarios.map((scenario) => api<Validation>("/api/scenarios/validate", {
+        method: "POST", body: JSON.stringify({ decisions: scenario.decisions }),
+      })));
+      const invalid = checks.findIndex((check) => !check.valid);
+      if (invalid >= 0) {
+        setCompleted((current) => current.slice(0, invalid));
+        setActiveIndex(invalid);
+        throw new Error(`${scenarios[invalid].name}: ${checks[invalid].violations.map(violationLabel).join(" ")}`);
+      }
+      const nextResults: SimulationResult[] = [];
+      for (const [index, scenario] of scenarios.entries()) {
+        setProgress(`Расчёт и отчёт ИИ: сценарий ${index + 1} из 5…`);
+        nextResults.push(await api<SimulationResult>("/api/scenarios/simulate", {
+          method: "POST", body: JSON.stringify({ decisions: scenario.decisions }),
+        }));
+      }
+      setProgress("ИИ сравнивает все сценарии и формулирует общий вывод…");
+      let overview: Comparison;
+      try {
+        overview = await api<Comparison>("/api/scenarios/compare", {
+          method: "POST", body: JSON.stringify({ scenarios: scenarios.map((scenario) => ({ decisions: scenario.decisions })) }),
+        });
+      } catch {
+        const best = Math.max(...nextResults.map((item) => item.final_score));
+        overview = { winner_indexes: nextResults.flatMap((item, index) => item.final_score === best ? [index] : []), best_score: best,
+          provider: "mock-fallback", conclusion: "Общий вывод ИИ временно недоступен. Лидеры определены по рассчитанному индексу; при равенстве единственного победителя нет.", reasons: [], limitations: ["Изучите риски и компромиссы в разборе каждого сценария."] };
+      }
+      setComparison(overview);
+      setResults(nextResults);
+      setReportIndex(overview.winner_indexes[0]);
+      setResult(nextResults[overview.winner_indexes[0]]);
+      setProgress("");
+    } catch (reason) {
+      setSubmitError(reason instanceof Error ? reason.message : "Не удалось рассчитать сценарии. Повторите отправку.");
+    } finally { submitLock.current = false; setSubmitting(false); }
   }
 
   function addInitiative(initiative: Initiative) {
@@ -395,9 +650,13 @@ export default function App() {
   }
 
   function resetAll() {
+    if (submitLock.current || confirming) return;
     if (!window.confirm("Удалить все пять сценариев и начать заново?")) return;
     setScenarios(defaultScenarios());
     setActiveIndex(0);
+    setCompleted([]);
+    setResults([]);
+    setResult(null);
     setNotice("");
   }
 
@@ -408,7 +667,21 @@ export default function App() {
       ...scenario,
       decisions: previous.decisions.map((decision) => ({ ...decision })),
     }));
-    setNotice("Сценарий скопирован. Измените хотя бы одно решение, чтобы сделать вариант уникальным.");
+    setNotice("Сценарий скопирован. Проверьте выбор и подтвердите завершение.");
+  }
+
+  async function refreshEvidence() {
+    setEvidenceBusy(true);
+    setEvidenceError("");
+    try {
+      const nextStatus = await api<EvidenceStatus>("/api/evidence/refresh", { method: "POST" });
+      setEvidenceStatus(nextStatus);
+      setEvidenceAdvice(null);
+    } catch (reason) {
+      setEvidenceError(reason instanceof Error ? reason.message : "Источники не обновлены");
+    } finally {
+      setEvidenceBusy(false);
+    }
   }
 
   return (
@@ -416,7 +689,7 @@ export default function App() {
       <header className="topbar">
         <a className="brand" href="#top" aria-label="MeysQosAI — наверх">
           <span className="brand-mark">M</span>
-          <span><strong>MeysQosAI</strong><small>Городской AI-симулятор</small></span>
+          <span><strong>MeysQosAI</strong><small>Городской ИИ-симулятор</small></span>
         </a>
         <div className="topbar-actions">
           <span className="demo-badge">Синтетические данные • демомодель</span>
@@ -475,6 +748,7 @@ export default function App() {
                 key={scenario.id}
                 role="tab"
                 aria-selected={index === activeIndex}
+                disabled={confirming || submitting || scenarios.slice(0, index).some((_, previous) => !isCompleted(previous))}
                 className={index === activeIndex ? "active" : ""}
                 onClick={() => {
                   setActiveIndex(index);
@@ -483,7 +757,7 @@ export default function App() {
               >
                 <span>{index + 1}</span>
                 <strong>{scenario.name}</strong>
-                <small>{scenario.decisions.length}/5 решений</small>
+                <small>{isCompleted(index) ? "Завершён ✓" : `${scenario.decisions.length}/5 решений`}</small>
               </button>
             ))}
           </div>
@@ -501,6 +775,20 @@ export default function App() {
 
           {notice && <div className="notice" role="status">{notice}</div>}
           {error && <div className="error-card" role="alert">{error}</div>}
+
+          <section className="workflow-panel" aria-label="Завершение сценариев">
+            <div>
+              <strong>Шаг {activeIndex + 1} из 5 · завершено {completed.length}/5</strong>
+              <p>В каждом сценарии: ровно 5 разных мер, не более 100 единиц и 2 мер одного направления. Достаточно минимум 3 направлений — все блоки заполнять не нужно. Остаток сохраняется, бонуса не даёт.</p>
+              <p>Подтвердите текущий сценарий, чтобы открыть следующий. Изменение выбора требует повторного подтверждения этого и последующих сценариев; сами выбранные меры сохраняются.</p>
+            </div>
+            <button className="secondary-button icon-label" disabled={!validation?.valid || confirming || submitting || isCompleted(activeIndex)} onClick={completeScenario}>
+              <Icon name="check" size={16} />
+              {confirming ? "Проверяем…" : isCompleted(activeIndex) ? "Сценарий завершён ✓" : activeIndex < 4 ? "Завершить и перейти дальше" : "Завершить пятый сценарий"}
+            </button>
+            <button className="primary-button" disabled={!allCompleted || submitting} onClick={submitScenarios}><Icon name="effect" size={16} /> Рассчитать все 5 сценариев</button>
+            {results.length === 5 && <button className="secondary-button" onClick={() => dialogRef.current?.showModal()}>Открыть результаты</button>}
+          </section>
 
           <div className="workspace-grid">
             <aside className="context-panel">
@@ -525,6 +813,15 @@ export default function App() {
               <div className="model-note">
                 <strong>О модели</strong>
                 <p>Все значения синтетические. Расчёты выполняет прозрачная математическая модель, а не ИИ.</p>
+              </div>
+              <div className="model-note city-theory">
+                <strong>Цель управления</strong>
+                <p>{catalog.city_context.mission_ru}</p>
+                <small>
+                  Слабейший район до изменений: {catalog.city_context.baseline_snapshot.weakest_district.name_ru}
+                  {" · "}{catalog.city_context.baseline_snapshot.weakest_district.score.toFixed(2)}
+                  {" · критических показателей: "}{catalog.city_context.baseline_snapshot.critical_count}
+                </small>
               </div>
             </aside>
 
@@ -722,23 +1019,50 @@ export default function App() {
                 })}
               </section>
 
+              <dialog ref={dialogRef} className="results-dialog" aria-labelledby="results-title">
+                <div className="results-dialog-header">
+                  <h2 id="results-title">Результаты пяти сценариев</h2>
+                  <button className="secondary-button icon-label" autoFocus onClick={() => dialogRef.current?.close()}><Icon name="remove" size={16} /> Закрыть</button>
+                </div>
+                {submitting && <p role="status">{progress} Это может занять несколько минут.</p>}
+                {submitError && <p role="alert" className="error-card">{submitError} Закройте окно и повторите отправку.</p>}
+                {comparison && result && <section className="comparison-overview" aria-label="Общий вывод по сценариям">
+                  <p className="section-kicker">Общий вывод · {reportProviderLabel(comparison.provider)}</p>
+                  <h3>{comparison.winner_indexes.length === 1 ? "Лучший сценарий" : "Лидеры с одинаковым результатом"}: {comparison.winner_indexes.map((index) => scenarios[index].name).join(", ")}</h3>
+                  <p className="comparison-score">Индекс качества жизни: {comparison.best_score.toFixed(2)}</p>
+                  <p>{comparison.conclusion}</p>
+                  <h4>Почему этот результат</h4>
+                  <ul>{comparison.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+                  <h4>Что учесть перед выбором</h4>
+                  <ul>{comparison.limitations.map((item) => <li key={item}>{item}</li>)}</ul>
+                </section>}
+                {results.length > 0 && <h3>Подробный разбор каждого сценария</h3>}
+                <div className="result-tabs">
+                  {results.map((item, index) => item && <button key={index} aria-pressed={reportIndex === index} onClick={() => {
+                    setEvidenceAdvice(null);
+                    setReportIndex(index);
+                    setResult(item);
+                  }}>{scenarios[index].name} · {item.final_score.toFixed(2)}</button>)}
+                </div>
               {result && (
-                <section className="result-panel">
+                <>
+                  <section className="result-panel">
                   <div className="result-score">
                     <p className="section-kicker">Сценарий рассчитан</p>
                     <strong>{result.final_score.toFixed(2)}</strong>
                     <span>{result.score_delta >= 0 ? "+" : ""}{result.score_delta.toFixed(2)} к исходному значению</span>
                   </div>
                   <div className="result-copy">
-                    <h3>
-                      Индекс изменился на {result.score_delta >= 0 ? "+" : ""}
-                      {result.score_delta.toFixed(2)} пункта
-                    </h3>
-                    <p>
-                      Наибольший прирост получил район {result.district_results.reduce(
-                        (best, district) => district.score_delta > best.score_delta ? district : best,
-                      ).name_ru}.
-                    </p>
+                    <div className="report-heading">
+                      <h3>
+                        Отчёт ИИ: индекс изменился на {result.score_delta >= 0 ? "+" : ""}
+                        {result.score_delta.toFixed(2)} пункта
+                      </h3>
+                      <span className={`verdict ${result.explanation.verdict}`}>
+                        {result.explanation.verdict === "improved" ? "Улучшение" : result.explanation.verdict === "mixed" ? "Смешанный результат" : "Ухудшение"}
+                      </span>
+                    </div>
+                    <p>{result.explanation.summary}</p>
                     <div className="district-deltas">
                       {result.district_results.map((district) => (
                         <span key={district.district_id}>
@@ -750,9 +1074,174 @@ export default function App() {
                     {result.activated_synergies.length > 0 && (
                       <p className="synergy-note">Сработала синергия: {result.activated_synergies.join(", ")}</p>
                     )}
+                    <div className="report-grid">
+                      <div><strong>Что хорошо</strong><ul>{result.explanation.strengths.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                      <div><strong>Риски</strong><ul>{result.explanation.risks.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                      <div><strong>Компромиссы</strong><ul>{result.explanation.tradeoffs.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                      <div><strong>Следующий шаг</strong><ul>{result.explanation.recommendations.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                    </div>
+                    <p className="resource-report">{result.explanation.resource_assessment} · {reportProviderLabel(result.ai_provider)}</p>
                   </div>
-                </section>
+                  </section>
+
+                  <section className="city-report-panel">
+                    <div className="section-heading city-report-heading">
+                      <div>
+                        <p className="section-kicker">Обоснование сценария</p>
+                        <h3>Что выбрано, зачем это нужно и что известно о городе</h3>
+                      </div>
+                      <span className="rule-pill">После финального расчёта</span>
+                    </div>
+
+                    <div className="evidence-toolbar">
+                      <div>
+                        <p className="section-kicker">Официальная практика Астаны</p>
+                        <h4>Проверка решений по официальным источникам</h4>
+                        <p>
+                          {evidenceStatus?.item_count
+                            ? `В базе сохранено ${evidenceStatus.item_count} фактов с источниками. Они не меняют расчётный индекс.`
+                            : "Обновите базу, чтобы сопоставить сценарий с официальными публикациями и статистикой."}
+                        </p>
+                      </div>
+                      <button className="secondary-button" onClick={refreshEvidence} disabled={evidenceBusy}>
+                        {evidenceBusy ? "Анализируем…" : evidenceStatus?.item_count ? "Обновить источники" : "Загрузить источники"}
+                      </button>
+                    </div>
+                    {evidenceStatus?.updated_at && (
+                      <p className="evidence-status">
+                        Статус: {evidenceStatusLabels[evidenceStatus.status]} · обновлено {new Date(evidenceStatus.updated_at).toLocaleString("ru-RU")}
+                      </p>
+                    )}
+                    {evidenceError && <div className="evidence-warning" role="alert">{evidenceError}</div>}
+
+                    {evidenceAdvice && (
+                      <div className="evidence-report">
+                        <p className="evidence-disclosure">{evidenceAdvice.disclosure}</p>
+                        <div className="evidence-digest">
+                          <div><strong>Что подтверждается</strong><ul>{evidenceAdvice.city_digest.proven_patterns.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                          <div><strong>Сигналы осторожности</strong><ul>{evidenceAdvice.city_digest.caution_signals.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                          <div><strong>Пробелы данных</strong><ul>{evidenceAdvice.city_digest.evidence_gaps.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                        </div>
+                        <div className="evidence-recommendations">
+                          {evidenceAdvice.recommendations.map((recommendation) => {
+                            const decision = result.report_context.selected_decisions.find((item) => item.initiative_id === recommendation.initiative_id);
+                            return (
+                              <article key={recommendation.initiative_id}>
+                                <header>
+                                  <div><small>{recommendation.initiative_id}</small><h5>{decision?.name_ru ?? recommendation.initiative_id}</h5></div>
+                                  <span className={`assessment ${recommendation.assessment}`}>{assessmentLabels[recommendation.assessment]}</span>
+                                </header>
+                                <p>{recommendation.rationale}</p>
+                                {recommendation.conditions.length > 0 && <ul className="evidence-conditions">{recommendation.conditions.map((item) => <li key={item}>{item}</li>)}</ul>}
+                                <div className="source-list">
+                                  {recommendation.evidence.map((source) => (
+                                    <a href={source.url} target="_blank" rel="noreferrer" key={`${source.id}-${source.claim}`}>
+                                      <span>{claimTypeLabels[source.claim_type]} · достоверность: {confidenceLabels[source.confidence]}</span>
+                                      <strong>{source.title}</strong>
+                                      <p>{source.claim}</p>
+                                      <small>{source.publisher} · {source.published_at} ↗</small>
+                                    </a>
+                                  ))}
+                                  {recommendation.evidence.length === 0 && <small className="no-source">Для этого решения в текущем кэше нет прямого источника.</small>}
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="choice-explanations">
+                      {result.report_context.selected_decisions.map((decision, index) => (
+                        <article className="choice-explanation" key={decision.initiative_id}>
+                          <div className="choice-index">{index + 1}</div>
+                          <div className="choice-body">
+                            <div className="choice-meta">
+                              <span>{decision.initiative_id} · {decision.direction_name_ru}</span>
+                              <span>{decision.target_name_ru}</span>
+                            </div>
+                            <h4>{decision.name_ru}</h4>
+                            <p>{decision.rationale_ru}</p>
+                            <div className="choice-effects">
+                              {decision.realized_effects.map((effect) => (
+                                <span className={effect.delta < 0 ? "negative" : ""} key={effect.indicator_id}>
+                                  {effect.indicator_name_ru} {effect.delta >= 0 ? "+" : ""}{effect.delta.toFixed(2)}
+                                </span>
+                              ))}
+                            </div>
+                            <small>
+                              {decision.cost} ед. · задержка эффекта {decision.lag_quarters} кв. · реализовано к концу периода {Math.round(decision.realized_fraction * 100)}%
+                            </small>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+
+                    <div className="city-knowledge-intro">
+                      <div>
+                        <p className="section-kicker">Что знает модель</p>
+                        <h4>{catalog.city_context.mission_ru}</h4>
+                        <p>{catalog.city_context.data_disclosure_ru}</p>
+                      </div>
+                      <ul>
+                        {catalog.city_context.goals.map((goal) => <li key={goal}>{goal}</li>)}
+                      </ul>
+                    </div>
+
+                    <div className="knowledge-section">
+                      <h4>Состояние направлений до решений</h4>
+                      <div className="direction-knowledge">
+                        {catalog.city_context.baseline_snapshot.direction_scores.map((direction) => (
+                          <div key={direction.direction_id}>
+                            <span>{direction.name_ru}</span>
+                            <strong>{direction.value.toFixed(1)}</strong>
+                            <i><b style={{ width: `${direction.value}%` }} /></i>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="knowledge-section">
+                      <h4>Потребности города до изменений</h4>
+                      <p>Все показатели ниже порога внимания 55, начиная с самых слабых.</p>
+                      <div className="city-needs-grid">
+                        {catalog.city_context.baseline_snapshot.city_needs.map((need) => (
+                          <span className={need.severity} key={`${need.district_id}-${need.indicator_id}`}>
+                            <small>{need.severity === "critical" ? "Критично" : "Внимание"} · {need.district_name_ru}</small>
+                            <strong>{need.value.toFixed(0)}</strong>
+                            <em>{need.name_ru}</em>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="knowledge-section">
+                      <h4>Профиль каждого района</h4>
+                      <div className="district-knowledge-grid">
+                        {catalog.city_context.baseline_snapshot.districts.map((district) => (
+                          <article key={district.district_id}>
+                            <header><strong>{district.name_ru}</strong><span>{district.score.toFixed(2)}</span></header>
+                            <p>{district.profile_ru}</p>
+                            <small>Нужно усилить</small>
+                            <ul>
+                              {district.priority_indicators.length > 0
+                                ? district.priority_indicators.map((indicator) => <li key={indicator.indicator_id}>{indicator.name_ru}: {indicator.value.toFixed(0)}</li>)
+                                : <li>Нет показателей ниже 55</li>}
+                            </ul>
+                            <small>Сильные стороны</small>
+                            <ul>
+                              {district.strong_indicators.length > 0
+                                ? district.strong_indicators.map((indicator) => <li key={indicator.indicator_id}>{indicator.name_ru}: {indicator.value.toFixed(0)}</li>)
+                                : <li>Нет показателей от 70</li>}
+                            </ul>
+                          </article>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                </>
               )}
+              </dialog>
             </div>
 
             <BudgetPanel
@@ -760,8 +1249,10 @@ export default function App() {
               scenario={activeScenario}
               initiatives={initiatives}
               validation={validation}
-              result={result}
+              result={null}
               onRemove={removeInitiative}
+              onComplete={completeScenario}
+              completeDisabled={!validation?.valid || confirming || submitting || isCompleted(activeIndex)}
             />
           </div>
         </section>

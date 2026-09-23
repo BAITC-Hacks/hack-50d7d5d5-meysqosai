@@ -24,6 +24,20 @@ def test_catalog_exposes_authoritative_parameters() -> None:
     assert len(body["indicators"]) == 10
     assert len(body["initiatives"]) == 14
     assert abs(body["baseline_score"] - 52.56) <= 0.01
+    context = body["city_context"]
+    assert context["resource_constraints"]["budget"] == 100
+    assert context["baseline_snapshot"]["weakest_district"]["district_id"] == "nura"
+    assert context["baseline_snapshot"]["critical_count"] == 2
+    needs = context["baseline_snapshot"]["city_needs"]
+    assert needs[0] == {
+        "district_id": "nura",
+        "district_name_ru": "Нура",
+        "indicator_id": "S2",
+        "name_ru": "Поликлиники и первичная медпомощь",
+        "value": 35.0,
+        "severity": "critical",
+    }
+    assert len(context["baseline_snapshot"]["districts"]) == 5
 
 
 def test_published_example_is_valid_and_changes_score() -> None:
@@ -50,6 +64,21 @@ def test_published_example_is_valid_and_changes_score() -> None:
     assert result["score_delta"] > 0
     assert result["activated_synergies"] == ["M10+M12"]
     assert result["ai_provider"] == "mock"
+    assert result["report_context"]["resource_use"]["spent"] == 95
+    assert result["report_context"]["goal_status"]["score_improved"] is True
+    selections = result["report_context"]["selected_decisions"]
+    assert len(selections) == 5
+    assert selections[0]["target_name_ru"] == "Нура"
+    assert selections[0]["realized_effects"] == [
+        {
+            "indicator_id": "S1",
+            "indicator_name_ru": "Школы и детсады",
+            "delta": 10.0,
+        }
+    ]
+    assert "38/100" in selections[0]["rationale_ru"]
+    assert result["explanation"]["verdict"] in {"improved", "mixed", "declined"}
+    assert result["explanation"]["resource_assessment"]
 
     contributions = {
         item["initiative_id"]: item for item in result["initiative_contributions"]
@@ -63,6 +92,33 @@ def test_published_example_is_valid_and_changes_score() -> None:
         "nura",
     }
 
+
+def test_report_calls_out_modeled_negative_tradeoff() -> None:
+    decisions = [
+        {"initiative_id": "M11", "scope": "district", "district_id": "nura"},
+        {"initiative_id": "M1", "scope": "district", "district_id": "yesil"},
+        {"initiative_id": "M4", "scope": "district", "district_id": "saryarka"},
+        {"initiative_id": "M9", "scope": "district", "district_id": "baikonur"},
+        {"initiative_id": "M12", "scope": "city", "district_id": None},
+    ]
+    with TestClient(app) as client:
+        response = client.post("/api/scenarios/simulate", json={"decisions": decisions})
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["report_context"]["tradeoffs"] == [
+        {
+            "district_id": "nura",
+            "indicator_id": "T1",
+            "before": 55.0,
+            "after": 53.25,
+            "delta": -1.75,
+            "district_name_ru": "Нура",
+            "indicator_name_ru": "Разгрузка дорог",
+        }
+    ]
+    assert result["explanation"]["verdict"] == "mixed"
+    assert any("-1.75" in item for item in result["explanation"]["tradeoffs"])
 
 def test_over_budget_scenario_has_no_score() -> None:
     decisions = [
