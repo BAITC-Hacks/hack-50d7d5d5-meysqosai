@@ -26,6 +26,35 @@ def test_health() -> None:
     assert response.json()["ai_provider"] == "mock"
 
 
+def test_comparison_reports_ties_and_rejects_invalid_scenarios() -> None:
+    payload = {"scenarios": [{"decisions": EXAMPLE_DECISIONS} for _ in range(5)]}
+    with TestClient(app) as client:
+        response = client.post("/api/scenarios/compare", json=payload)
+        assert response.status_code == 200
+        assert response.json()["winner_indexes"] == [0, 1, 2, 3, 4]
+        assert response.json()["provider"] == "mock"
+        assert response.json()["conclusion"]
+        payload["scenarios"][0] = {"decisions": []}
+        assert client.post("/api/scenarios/compare", json=payload).status_code == 422
+
+
+def test_comparison_selects_highest_score() -> None:
+    cheaper = [
+        {"initiative_id": item, "scope": "city" if item == "M12" else "district",
+         "district_id": None if item == "M12" else "nura"}
+        for item in ["M9", "M11", "M10", "M12", "M4"]
+    ]
+    variants = [EXAMPLE_DECISIONS, cheaper, cheaper, cheaper, cheaper]
+    with TestClient(app) as client:
+        scores = [client.post("/api/scenarios/simulate", json={"decisions": decisions})
+                  .json()["final_score"] for decisions in variants]
+        response = client.post("/api/scenarios/compare", json={
+            "scenarios": [{"decisions": decisions} for decisions in variants],
+        }).json()
+    assert response["best_score"] == max(scores)
+    assert response["winner_indexes"] == [i for i, score in enumerate(scores) if score == max(scores)]
+
+
 def test_note_round_trip() -> None:
     with TestClient(app) as client:
         created = client.post("/api/notes", json={"title": "Triage", "body": "Demo case"})

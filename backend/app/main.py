@@ -17,7 +17,7 @@ from app.database import (
 from app.database import (
     evidence_status as load_evidence_status,
 )
-from app.services.ai import explain_simulation, summarize
+from app.services.ai import compare_results, explain_simulation, summarize
 from app.services.evidence import (
     EvidenceServiceError,
     advise_scenario,
@@ -55,6 +55,11 @@ class ScenarioInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     decisions: list[DecisionInput] = Field(max_length=14)
+
+
+class ComparisonInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    scenarios: list[ScenarioInput] = Field(min_length=5, max_length=5)
 
 
 @asynccontextmanager
@@ -119,6 +124,20 @@ async def simulate_scenario(
     result["explanation"] = explanation
     result["ai_provider"] = provider
     return result
+
+
+@app.post("/api/scenarios/compare")
+async def compare_scenarios(
+    payload: ComparisonInput,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    fixture = simulator_fixture(settings)
+    try:
+        results = [simulate(fixture, [item.model_dump() for item in scenario.decisions])
+                   for scenario in payload.scenarios]
+    except ScenarioValidationError as error:
+        raise HTTPException(status_code=422, detail=error.validation) from error
+    return await compare_results(results, settings)
 
 
 @app.get("/api/evidence/status")

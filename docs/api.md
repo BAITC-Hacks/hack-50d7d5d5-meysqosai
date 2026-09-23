@@ -160,6 +160,14 @@ scenario persistence is implemented; persistence is not required for scoring.
 
 ## Official evidence endpoints
 
+`POST /api/scenarios/compare` accepts `scenarios`, exactly five objects using the
+shared scenario request. All five are validated and recalculated server-side.
+Invalid input returns 422. The response contains zero-based `winner_indexes`
+(all ties included), `best_score`, `provider`, `conclusion`, `reasons`, and
+`limitations`. The AI explains the deterministic ranking; provider failure returns
+a disclosed Russian-language deterministic fallback. This summary appears before
+the individual reports in the results dialog.
+
 `POST /api/evidence/refresh` performs live research only when `AI_PROVIDER=openai` and a backend key is configured. It returns status metadata, never provider credentials or raw provider payloads:
 
 ```json

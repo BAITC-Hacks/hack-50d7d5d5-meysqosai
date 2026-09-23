@@ -526,7 +526,7 @@ def _report_context(
                 "rationale_ru": (
                     f"Мера влияет на направление «"
                     f"{direction_by_id[initiative['direction']]['name_ru']}». "
-                    f"Самая слабая связанная точка baseline — "
+                    f"Самая слабая связанная точка до изменений — "
                     f"{weakest_related['district_name_ru']}: "
                     f"{weakest_related['indicator_name_ru']} "
                     f"{weakest_related['value']:.0f}/100."

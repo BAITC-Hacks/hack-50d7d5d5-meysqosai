@@ -19,6 +19,59 @@ class ScenarioExplanation(BaseModel):
     recommendations: list[str] = Field(min_length=1, max_length=5)
 
 
+class ComparisonExplanation(BaseModel):
+    conclusion: str
+    reasons: list[str]
+    limitations: list[str]
+
+
+async def compare_results(results: list[dict[str, Any]], settings: Settings) -> dict[str, Any]:
+    best_score = max(item["final_score"] for item in results)
+    winners = [index for index, item in enumerate(results) if item["final_score"] == best_score]
+    labels = ", ".join(str(index + 1) for index in winners)
+    fallback = ComparisonExplanation(
+        conclusion=(f"Лучший результат по индексу качества жизни: {best_score:.2f}. "
+                    f"Сценарии с этим результатом: {labels}. "
+                    + ("При равных индексах единственного победителя нет." if len(winners) > 1
+                       else "Этот сценарий занимает первое место по правилам модели.")),
+        reasons=["Сравнение выполнено по итоговому индексу при одинаковом исходном состоянии.",
+                 "Неиспользованный бюджет не добавляет бонусных баллов."],
+        limitations=["Индекс основан на синтетических данных.",
+                     "Перед выбором изучите оставшиеся дефициты и отрицательные эффекты каждого варианта."],
+    )
+    provider = "mock" if settings.ai_provider == "mock" else "mock-fallback"
+    explanation = fallback
+    if settings.ai_provider == "openai" and settings.ai_api_key:
+        try:
+            async with AsyncOpenAI(api_key=settings.ai_api_key,
+                                   base_url=settings.ai_base_url or None,
+                                   timeout=60, max_retries=0) as client:
+                response = await client.responses.parse(
+                    model=settings.ai_model,
+                    instructions=(
+                        "Напиши общий вывод для акима на русском языке. Сначала назови лучший "
+                        "сценарий по рассчитанному индексу, затем объясни преимущества и ограничения "
+                        "в сравнении с другими вариантами. Номера сценариев начинаются с 1. "
+                        "Победители уже рассчитаны сервером, не меняй их и не пересчитывай числа. "
+                        "При равенстве укажи всех лидеров без выдуманного победителя. "
+                        "Не давай бонус за остаток бюджета. Данные синтетические. "
+                        "Учитывай критические дефициты, слабейший район и компромиссы."
+                    ),
+                    input=json.dumps({"winner_numbers": [i + 1 for i in winners], "scenarios": [
+                        {"number": i + 1, "final_score": r["final_score"],
+                         "report_context": r["report_context"]} for i, r in enumerate(results)
+                    ]}, ensure_ascii=False),
+                    text_format=ComparisonExplanation,
+                )
+                if response.output_parsed:
+                    explanation = response.output_parsed
+                    provider = "openai"
+        except (OpenAIError, ValidationError, ValueError, TypeError):
+            pass
+    return {"winner_indexes": winners, "best_score": best_score, "provider": provider,
+            **explanation.model_dump()}
+
+
 async def summarize(text: str, settings: Settings) -> tuple[str, str]:
     if settings.ai_provider == "mock":
         compact = " ".join(text.split())
@@ -73,7 +126,9 @@ async def explain_simulation(
                 "Ты аналитический агент демонстрационной модели города. Все данные синтетические. "
                 "Объясни результат на русском языке только по входным рассчитанным фактам. "
                 "Не пересчитывай и не придумывай числа, городские факты или причинность. "
-                "Рост общего score не отменяет критические дефициты, слабый район или trade-offs. "
+                "Рост общего индекса не отменяет критические дефициты, слабый район или компромиссы. "
+                "Пиши пояснения полностью по-русски: индекс качества жизни, исходное состояние, "
+                "бюджетные единицы. Не используй английские термины в значениях полей. "
                 "Верни только JSON с ключами summary, verdict, strengths, risks, tradeoffs, "
                 "resource_assessment, recommendations. verdict: improved, mixed или declined. "
                 "Все остальные текстовые поля — строки или массивы строк."
@@ -119,7 +174,7 @@ def _mock_scenario_explanation(result: dict[str, Any]) -> dict[str, Any]:
         weakest = goal["weakest_district"]
         recommendation = (
             f"Перед решением сравнить альтернативу для слабейшего района {weakest['name_ru']} "
-            f"(score {weakest['score']:.2f})."
+            f"(индекс {weakest['score']:.2f})."
         )
 
     tradeoffs = [
@@ -135,7 +190,7 @@ def _mock_scenario_explanation(result: dict[str, Any]) -> dict[str, Any]:
     resources = report["resource_use"]
     return ScenarioExplanation(
         summary=(
-            f"Quality of Life Score изменился с {result['baseline_score']:.2f} до "
+            f"Индекс качества жизни изменился с {result['baseline_score']:.2f} до "
             f"{result['final_score']:.2f} ({result['score_delta']:+.2f})."
         ),
         verdict=verdict,
@@ -153,12 +208,12 @@ def _mock_scenario_explanation(result: dict[str, Any]) -> dict[str, Any]:
             critical_risk,
             (
                 f"Слабейший район после расчёта — {goal['weakest_district']['name_ru']} "
-                f"со score {goal['weakest_district']['score']:.2f}."
+                f"с индексом {goal['weakest_district']['score']:.2f}."
             ),
         ],
         tradeoffs=tradeoffs,
         resource_assessment=(
-            f"Использовано {resources['spent']} из {resources['budget']} coin; "
+            f"Использовано {resources['spent']} из {resources['budget']} бюджетных единиц; "
             f"резерв {resources['remaining']}. Выбрано {resources['decisions_used']} из "
             f"{resources['decisions_required']} обязательных решений по "
             f"{len(report['coverage']['directions_used'])} направлениям."

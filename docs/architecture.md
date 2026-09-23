@@ -20,6 +20,15 @@ The application remains one React frontend, one FastAPI backend, and one SQLite 
 
 ## Responsibility boundaries
 
+The frontend collects five scenarios sequentially. Each explicit completion is validated
+by the backend before unlocking the next scenario. Editing an earlier selection revokes
+its completion and later confirmations, preserving their choices. Only the final Submit
+validates all five and requests simulations; results are displayed in a native modal
+dialog with a separate result selector. Completion flags are session-only and restored
+drafts require confirmation again. Each scenario retains its own budget of 100; filling
+every direction is not required. Five measures with at most two per direction imply
+at least three directions. The existing individual API contracts are reused.
+
 - `frontend/`: scenario selection, budget display, client-side convenience hints, result visualization. It must not be the source of truth for validation or scoring.
 - `backend/app/main.py`: HTTP contracts and orchestration.
 - `backend/app/services/simulator.py`: deterministic validation and scoring; no network or LLM dependency.

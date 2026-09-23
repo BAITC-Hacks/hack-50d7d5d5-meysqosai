@@ -11,6 +11,13 @@ Target: 3 minutes. Rehearse with the actual deployed URL and a local backup.
 
 ## Recovery plan
 
+Complete each of the five scenarios before moving forward. The published example
+is M7/M8/M10 in Nura, M12 citywide, and M5 in Saryarka (95 units).
+Use the copy button to prepare the next variant, then confirm it.
+Press «Рассчитать все 5 сценариев». Show the overall conclusion and winning
+scenario(s) first, then the per-scenario reports and official sources.
+Equal scores share first place. For a quick offline demo, start with AI_PROVIDER=mock.
+
 - Keep a known-good sample input.
 - Keep screenshots or a 60-second screen recording.
 - Keep local mock mode working without network or keys.
