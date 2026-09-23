@@ -26,7 +26,11 @@ The application remains one React frontend, one FastAPI backend, and one SQLite 
 
 ## Deterministic calculation
 
-For each selected initiative, apply its full effect multiplied by `(8 - lag_quarters) / 8`. City initiatives affect all five districts; district initiatives affect only their selected district. Then apply fixed synergies and clip each indicator to 0–100.
+For each selected initiative, apply its full effect multiplied by `(8 - lag_quarters) / 8`.
+Every decision explicitly declares `scope`. The catalog declares the one scope for which each
+initiative is eligible: a valid `city` decision affects all five districts, while a valid
+`district` decision affects only its one selected district. Then apply fixed synergies and clip
+each indicator to 0–100.
 
 District score:
 
@@ -47,7 +51,7 @@ Score = 0.7 * D_avg + 0.3 * min(D_d) - N_crit
 
 1. Request shape and known IDs.
 2. Exactly five unique decisions.
-3. Correct district target for each scope.
+3. Explicit scope is eligible for the initiative and has the correct district target.
 4. Total cost no greater than 100.
 5. No more than two initiatives from one direction.
 6. No incompatible pairs in the prohibited scope.
@@ -117,3 +121,12 @@ No personal data is stored. A reset may clear demo scenarios without affecting t
 - **Reason:** the landing state must immediately communicate that the simulation is limited to Astana.
 - **Decision:** bundle an original AI-generated blue-hour Astana skyline as a compressed JPG and pair it with a visible `Астана • Казахстан` badge; no remote image host is required.
 - **Rejected:** hotlinking a third-party photograph with unclear competition and redistribution rights.
+
+### 2026-09-23 — Make initiative application scope explicit
+
+- **Reason:** inferring city scope from a null district is ambiguous for the map-based scenario
+  builder and makes invalid combinations harder to explain.
+- **Decision:** require `scope: "city" | "district"` on every decision, retain the organizer
+  catalog's scope as the eligibility rule, and reject mismatches before simulation.
+- **Trade-off:** this intentionally breaks the previous request shape; the separate frontend GIS
+  redesign must send the explicit field. Costs, effects, and deterministic scoring are unchanged.

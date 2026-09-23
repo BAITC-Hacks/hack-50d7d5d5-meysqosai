@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,6 +31,7 @@ class DecisionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     initiative_id: str = Field(min_length=1, max_length=16)
+    scope: Literal["city", "district"]
     district_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 

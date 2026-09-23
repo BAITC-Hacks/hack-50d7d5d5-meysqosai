@@ -12,11 +12,11 @@ Content-Type: application/json
 
 {
   "decisions": [
-    {"initiative_id": "M7", "district_id": "nura"},
-    {"initiative_id": "M8", "district_id": "nura"},
-    {"initiative_id": "M10", "district_id": "nura"},
-    {"initiative_id": "M12", "district_id": null},
-    {"initiative_id": "M5", "district_id": "saryarka"}
+    {"initiative_id": "M7", "scope": "district", "district_id": "nura"},
+    {"initiative_id": "M8", "scope": "district", "district_id": "nura"},
+    {"initiative_id": "M10", "scope": "district", "district_id": "nura"},
+    {"initiative_id": "M12", "scope": "city", "district_id": null},
+    {"initiative_id": "M5", "scope": "district", "district_id": "saryarka"}
   ]
 }
 
@@ -26,11 +26,11 @@ Content-Type: application/json
 
 {
   "decisions": [
-    {"initiative_id": "M7", "district_id": "nura"},
-    {"initiative_id": "M8", "district_id": "nura"},
-    {"initiative_id": "M10", "district_id": "nura"},
-    {"initiative_id": "M12", "district_id": null},
-    {"initiative_id": "M5", "district_id": "saryarka"}
+    {"initiative_id": "M7", "scope": "district", "district_id": "nura"},
+    {"initiative_id": "M8", "scope": "district", "district_id": "nura"},
+    {"initiative_id": "M10", "scope": "district", "district_id": "nura"},
+    {"initiative_id": "M12", "scope": "city", "district_id": null},
+    {"initiative_id": "M5", "scope": "district", "district_id": "saryarka"}
   ]
 }
 

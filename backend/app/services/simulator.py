@@ -55,6 +55,8 @@ def _validate_fixture(fixture: dict[str, Any]) -> None:
     for initiative in initiatives:
         if set(initiative.get("effects", {})) - indicator_ids:
             raise FixtureError("Initiative references an unknown indicator")
+        if initiative.get("scope") not in {"city", "district"}:
+            raise FixtureError("Initiative scope must be city or district")
 
 
 def catalog(fixture: dict[str, Any]) -> dict[str, Any]:
@@ -92,8 +94,22 @@ def validate_scenario(
             continue
         known.append((index, decision, initiative))
         initiative_indexes.setdefault(initiative_id, []).append(index)
+        scope = decision.get("scope")
         district_id = decision.get("district_id")
-        if initiative["scope"] == "district":
+        if scope not in {"city", "district"}:
+            add(
+                "INVALID_SCOPE",
+                f"Decision scope must be city or district; received {scope!r}.",
+                [index],
+            )
+            continue
+        if scope != initiative["scope"]:
+            add(
+                "SCOPE_NOT_ALLOWED",
+                f"Initiative {initiative_id} supports {initiative['scope']} scope, not {scope}.",
+                [index],
+            )
+        if scope == "district":
             if district_id is None:
                 add(
                     "DISTRICT_REQUIRED",
@@ -105,7 +121,7 @@ def validate_scenario(
         elif district_id is not None:
             add(
                 "DISTRICT_NOT_ALLOWED",
-                f"City initiative {initiative_id} cannot target one district.",
+                f"City-scoped decision {initiative_id} cannot target one district.",
                 [index],
             )
 
@@ -182,9 +198,7 @@ def simulate(
         realized_fraction = (
             fixture["horizon_quarters"] - initiative["lag_quarters"]
         ) / fixture["horizon_quarters"]
-        targets = (
-            district_ids if initiative["scope"] == "city" else [decision["district_id"]]
-        )
+        targets = district_ids if decision["scope"] == "city" else [decision["district_id"]]
         adjusted_effects = {
             indicator_id: effect * realized_fraction
             for indicator_id, effect in initiative["effects"].items()
@@ -206,8 +220,11 @@ def simulate(
         if not all(initiative_id in selected for initiative_id in synergy["initiative_ids"]):
             continue
         target_decision = selected[synergy["target_from"]]
-        target_id = target_decision.get("district_id")
-        targets = district_ids if target_id is None else [target_id]
+        targets = (
+            district_ids
+            if target_decision["scope"] == "city"
+            else [target_decision["district_id"]]
+        )
         for district_id in targets:
             for indicator_id, effect in synergy["effects"].items():
                 state[district_id][indicator_id] += effect
