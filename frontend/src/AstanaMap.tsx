@@ -2,6 +2,7 @@ import L, { type GeoJSON as LeafletGeoJSON, type Path } from "leaflet";
 import { useEffect, useRef, useState } from "react";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import "leaflet/dist/leaflet.css";
+import Icon from "./Icon";
 
 type District = { id: string; name_ru: string };
 type Decision = { initiative_id: string; scope: "city" | "district"; district_id: string | null };
@@ -302,8 +303,8 @@ export default function AstanaMap({
   return (
     <div className="osm-map-shell">
       <div className="map-caption">
-        <span><i aria-hidden="true" /> Интерактивная карта</span>
-        <small>Наведите или выберите район</small>
+        <span><Icon name="map" size={16} /> Интерактивная карта</span>
+        <small>Выберите район мышью или клавишей Enter</small>
       </div>
       {citywideCount > 0 && (
         <div className="citywide-banner">Городских программ выбрано: {citywideCount}</div>
