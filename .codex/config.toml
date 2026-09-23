@@ -1,0 +1,3 @@
+# Public, read-only OpenAI documentation. No credential is stored here.
+[mcp_servers.openaiDeveloperDocs]
+url = "https://developers.openai.com/mcp"
