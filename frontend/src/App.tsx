@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import AstanaMap from "./AstanaMap";
+import Icon, { type IconName } from "./Icon";
 
 type Direction = { id: string; name_ru: string; name_en: string };
 type Indicator = {
@@ -133,6 +134,18 @@ function signed(value: number): string {
   return `${value > 0 ? "+" : ""}${value}`;
 }
 
+const directionIcons: Record<string, IconName> = {
+  transport: "transport",
+  environment: "environment",
+  social: "social",
+  safety: "safety",
+  services: "services",
+};
+
+function quarterLabel(value: number): string {
+  return value === 1 ? "1-го квартала" : `${value}-го квартала`;
+}
+
 function BudgetPanel({
   catalog,
   scenario,
@@ -159,8 +172,8 @@ function BudgetPanel({
     <aside className="budget-panel" aria-label="Бюджет сценария">
       <div className="budget-heading">
         <div>
-          <p className="section-kicker">Бюджет сценария</p>
-          <h2>{catalog.budget} coin</h2>
+          <p className="section-kicker icon-label"><Icon name="budget" size={15} /> Бюджет сценария</p>
+          <h2>{catalog.budget} бюджетных единиц</h2>
         </div>
         <div
           className="coin-ring"
@@ -181,7 +194,7 @@ function BudgetPanel({
       </div>
       <div className="coin-grid" aria-hidden="true">
         {Array.from({ length: 20 }, (_, index) => (
-          <i key={index} className={index < Math.ceil(spent / 5) ? "spent" : ""}>₵</i>
+          <i key={index} className={index < Math.ceil(spent / 5) ? "spent" : ""} />
         ))}
       </div>
 
@@ -203,14 +216,14 @@ function BudgetPanel({
                 <span className="decision-number">{index + 1}</span>
                 <div>
                   <strong>{initiative.name_ru}</strong>
-                  <small>{district?.name_ru ?? "Весь город"} · {initiative.cost} coin</small>
+                  <small>{district?.name_ru ?? "Весь город"} · {initiative.cost} ед.</small>
                 </div>
                 <button
                   className="icon-button"
                   onClick={() => onRemove(decision.initiative_id)}
                   aria-label={`Удалить ${initiative.name_ru}`}
                 >
-                  ×
+                  <Icon name="remove" size={15} />
                 </button>
               </div>
             );
@@ -219,10 +232,10 @@ function BudgetPanel({
       </div>
 
       <div className={`score-preview ${result ? "ready" : ""}`}>
-        <span>Quality of Life Score</span>
+        <span>Индекс качества жизни</span>
         <strong>{result ? result.final_score.toFixed(2) : catalog.baseline_score.toFixed(2)}</strong>
         <small>
-          {result ? `${result.score_delta >= 0 ? "+" : ""}${result.score_delta.toFixed(2)} к baseline` : "предварительно после 5 решений"}
+          {result ? `${result.score_delta >= 0 ? "+" : ""}${result.score_delta.toFixed(2)} к исходному значению` : "расчёт появится после 5 решений"}
         </small>
       </div>
 
@@ -348,7 +361,7 @@ export default function App() {
     }
     if (spent + initiative.cost > model.budget) {
       setNotice(
-        `Это решение превышает бюджет сценария на ${spent + initiative.cost - model.budget} coin. Выберите более доступное мероприятие или измените другое решение.`,
+        `Это решение превышает бюджет сценария на ${spent + initiative.cost - model.budget} единиц. Выберите более доступное мероприятие или измените другое решение.`,
       );
       return;
     }
@@ -406,8 +419,8 @@ export default function App() {
           <span><strong>MeysQosAI</strong><small>Городской AI-симулятор</small></span>
         </a>
         <div className="topbar-actions">
-          <span className="demo-badge">Синтетические данные • Demo model</span>
-          <button className="text-button" onClick={resetAll}>Начать заново</button>
+          <span className="demo-badge">Синтетические данные • демомодель</span>
+          <button className="text-button icon-label" onClick={resetAll}><Icon name="reset" size={16} /> Начать заново</button>
         </div>
       </header>
 
@@ -418,14 +431,14 @@ export default function App() {
             <p className="eyebrow">Управленческая симуляция • 5 часов</p>
             <h1>Вы — аким.<br />Город ждёт решений.</h1>
             <p>
-              Изучите потребности районов, распределите 100 coin между пятью инициативами
+              Изучите потребности районов, распределите 100 бюджетных единиц между пятью инициативами
               и увидьте, как выбор меняет качество жизни в городе.
             </p>
             <div className="hero-actions">
               <button onClick={() => plannerRef.current?.scrollIntoView({ behavior: "smooth" })}>
                 Начать планирование
               </button>
-              <span>Baseline Score <strong>{catalog.baseline_score.toFixed(2)}</strong></span>
+              <span>Исходный индекс <strong>{catalog.baseline_score.toFixed(2)}</strong></span>
             </div>
           </div>
           <div className="hero-metrics" aria-label="Исходные показатели города">
@@ -433,12 +446,13 @@ export default function App() {
               const value = scoreByDirection(catalog, direction.id);
               return (
                 <div className="metric-orbit" key={direction.id} style={{ "--index": index } as React.CSSProperties}>
+                  <Icon name={directionIcons[direction.id] ?? "info"} size={20} />
                   <strong>{value.toFixed(0)}</strong>
                   <span>{direction.name_ru}</span>
                 </div>
               );
             })}
-            <div className="hero-core"><strong>100</strong><span>coin</span></div>
+            <div className="hero-core"><Icon name="budget" size={22} /><strong>100</strong><span>единиц</span></div>
           </div>
         </section>
 
@@ -447,11 +461,11 @@ export default function App() {
             <div>
               <p className="section-kicker">Конструктор сценариев</p>
               <h2>Соберите пять вариантов бюджета</h2>
-              <p>Каждый сценарий начинается с одинакового baseline и собственного бюджета 100 coin.</p>
+              <p>Каждый сценарий начинается с одинакового исходного индекса и бюджета 100 единиц.</p>
             </div>
             <div className="scenario-tools">
-              {activeIndex > 0 && <button className="secondary-button" onClick={copyPrevious}>Копировать предыдущий</button>}
-              <button className="danger-button" onClick={resetScenario}>Сбросить сценарий</button>
+              {activeIndex > 0 && <button className="secondary-button icon-label" onClick={copyPrevious}><Icon name="copy" size={16} /> Копировать предыдущий</button>}
+              <button className="danger-button icon-label" onClick={resetScenario}><Icon name="reset" size={16} /> Сбросить сценарий</button>
             </div>
           </div>
 
@@ -498,19 +512,19 @@ export default function App() {
                   const value = scoreByDirection(catalog, direction.id);
                   return (
                     <div key={direction.id}>
-                      <span>{direction.name_ru}<strong>{value.toFixed(0)}</strong></span>
+                      <span className="direction-score"><span><Icon name={directionIcons[direction.id] ?? "info"} size={16} />{direction.name_ru}</span><strong>{value.toFixed(0)}</strong></span>
                       <i><b style={{ width: `${value}%` }} /></i>
                     </div>
                   );
                 })}
               </div>
               <div className="baseline-score">
-                <small>Исходный Quality of Life Score</small>
+                <small>Исходный индекс качества жизни</small>
                 <strong>{catalog.baseline_score.toFixed(2)}</strong>
               </div>
               <div className="model-note">
                 <strong>О модели</strong>
-                <p>Все значения синтетические. Числа считает детерминированный движок, не AI.</p>
+                <p>Все значения синтетические. Расчёты выполняет прозрачная математическая модель, а не ИИ.</p>
               </div>
             </aside>
 
@@ -522,7 +536,7 @@ export default function App() {
                     <h3>Районы Астаны</h3>
                     <p className="section-subtitle">Выберите территорию, чтобы увидеть её профиль и направить районную инициативу.</p>
                   </div>
-                  <span className="map-mode-pill"><i aria-hidden="true" /> {targetScope === "city" ? "Весь город" : "Выбор района"}</span>
+                  <span className="map-mode-pill"><Icon name={targetScope === "city" ? "city" : "district"} size={16} /> {targetScope === "city" ? "Весь город" : "Выбор района"}</span>
                 </div>
                 <div className="map-target-layout">
                   <AstanaMap
@@ -544,7 +558,7 @@ export default function App() {
                       aria-pressed={targetScope === "city"}
                       onClick={() => setTargetScope("city")}
                     >
-                      <span className="target-icon" aria-hidden="true">◎</span>
+                      <span className="target-icon"><Icon name="city" size={19} /></span>
                       <strong>Весь город</strong>
                       <small>Эффект сразу для всех пяти районов</small>
                       <em>{cityDecisionCount} решений выбрано</em>
@@ -555,7 +569,7 @@ export default function App() {
                       aria-pressed={targetScope === "district"}
                       onClick={() => setTargetScope("district")}
                     >
-                      <span className="target-icon" aria-hidden="true">⌖</span>
+                      <span className="target-icon"><Icon name="district" size={19} /></span>
                       <strong>{selectedDistrict.name_ru}</strong>
                       <small>Точечный эффект в выбранном районе</small>
                       <em>{districtDecisionCount} решений выбрано</em>
@@ -565,7 +579,7 @@ export default function App() {
                 </div>
                 <article className="district-summary" aria-live="polite">
                   <div className="district-summary-copy">
-                    <span className="selection-marker" aria-hidden="true">✓</span>
+                    <span className="selection-marker"><Icon name="check" size={19} /></span>
                     <div>
                       <p className="section-kicker">Выбранный район</p>
                       <h4>{selectedDistrict.name_ru}</h4>
@@ -592,11 +606,11 @@ export default function App() {
                     </span>
                   </div>
                   <details className="indicator-details">
-                    <summary>Все 10 показателей</summary>
+                    <summary>Показать все 10 показателей и технические коды</summary>
                     <div className="indicator-grid">
                       {catalog.indicators.map((indicator) => (
                         <span key={indicator.id}>
-                          <small>{indicator.id}</small>
+                          <small title="Технический код показателя">{indicator.id}</small>
                           <strong>{selectedDistrict.indicators[indicator.id]}</strong>
                           <em>{indicator.name_ru}</em>
                         </span>
@@ -612,7 +626,7 @@ export default function App() {
                     <p className="section-kicker">Каталог мер</p>
                     <h3>Выберите ровно пять решений</h3>
                   </div>
-                  <span className="rule-pill">Макс. 2 из одного направления</span>
+                  <span className="rule-pill"><Icon name="info" size={15} /> Не более 2 решений из одного направления</span>
                 </div>
                 {catalog.directions.map((direction) => {
                   const directionInitiatives = catalog.initiatives.filter(
@@ -624,7 +638,7 @@ export default function App() {
                   return (
                     <div className="direction-group" key={direction.id}>
                       <div className="direction-title">
-                        <h4>{direction.name_ru}</h4>
+                        <h4><span className="direction-icon"><Icon name={directionIcons[direction.id] ?? "info"} size={19} /></span>{direction.name_ru}</h4>
                         <span>{selectedCount}/{catalog.max_per_direction} выбрано</span>
                       </div>
                       <div className="initiative-grid">
@@ -632,11 +646,45 @@ export default function App() {
                           const selected = selectedIds.has(initiative.id);
                           const availableForTarget = initiative.scope === targetScope;
                           const negativeEffects = Object.entries(initiative.effects).filter(([, value]) => value < 0);
+                          const directionLimitReached = selectedCount >= catalog.max_per_direction;
+                          const decisionLimitReached = activeScenario.decisions.length >= catalog.required_decisions;
+                          const overBudget = spent + initiative.cost > catalog.budget;
+                          const disabledReason = !availableForTarget
+                            ? `Сначала выберите область «${initiative.scope === "city" ? "Весь город" : "Район"}»`
+                            : directionLimitReached
+                              ? "Достигнут лимит для этого направления"
+                              : decisionLimitReached
+                                ? "Уже выбрано пять решений"
+                                : overBudget
+                                  ? "Недостаточно бюджета"
+                                  : "";
+                          const disabled = !selected && Boolean(disabledReason);
                           return (
-                            <article className={`initiative-card ${selected ? "selected" : ""} ${!selected && !availableForTarget ? "scope-muted" : ""}`} key={initiative.id}>
+                            <article
+                              role="button"
+                              tabIndex={0}
+                              className={`initiative-card ${selected ? "selected" : ""}`}
+                              key={initiative.id}
+                              aria-disabled={disabled}
+                              aria-pressed={selected}
+                              aria-label={`${selected ? "Убрать" : "Добавить"} инициативу «${initiative.name_ru}», стоимость ${initiative.cost} бюджетных единиц`}
+                              title={selected ? "Убрать инициативу из сценария" : disabledReason || "Добавить инициативу в сценарий"}
+                              onClick={() => {
+                                if (disabled) return;
+                                if (selected) removeInitiative(initiative.id);
+                                else addInitiative(initiative);
+                              }}
+                              onKeyDown={(event) => {
+                                if (disabled || (event.key !== "Enter" && event.key !== " ")) return;
+                                event.preventDefault();
+                                if (selected) removeInitiative(initiative.id);
+                                else addInitiative(initiative);
+                              }}
+                            >
                               <div className="initiative-meta">
-                                <span>{initiative.id}</span>
+                                <span className="audit-code" title="Технический код инициативы">Код {initiative.id}</span>
                                 <span className={initiative.scope === "city" ? "scope city" : "scope district"}>
+                                  <Icon name={initiative.scope === "city" ? "city" : "district"} size={14} />
                                   {initiative.scope === "city" ? "Весь город" : selectedDistrict.name_ru}
                                 </span>
                               </div>
@@ -644,23 +692,26 @@ export default function App() {
                               <div className="effects">
                                 {Object.entries(initiative.effects).map(([indicator, value]) => (
                                   <span className={value < 0 ? "negative" : ""} key={indicator}>
-                                    {indicator} {signed(value)}
+                                    <Icon name={value < 0 ? "risk" : "effect"} size={14} />
+                                    <b>{catalog.indicators.find((item) => item.id === indicator)?.name_ru ?? indicator}</b>
+                                    <strong>{signed(value)}</strong>
+                                    <small title="Технический код показателя">{indicator}</small>
                                   </span>
                                 ))}
                               </div>
-                              <p>
-                                Эффект с {initiative.lag_quarters}-го квартала
-                                {negativeEffects.length > 0 ? " · есть компромисс" : " · без отрицательного эффекта в модели"}
-                              </p>
+                              <div className="initiative-facts">
+                                <span><Icon name="clock" size={15} /> Эффект с {quarterLabel(initiative.lag_quarters)}</span>
+                                <span className={negativeEffects.length > 0 ? "has-risk" : "no-risk"}>
+                                  <Icon name={negativeEffects.length > 0 ? "risk" : "check"} size={15} />
+                                  {negativeEffects.length > 0 ? "Есть компромисс" : "Нет снижения показателей"}
+                                </span>
+                              </div>
                               <div className="initiative-footer">
-                                <strong>{initiative.cost} <small>coin</small></strong>
-                                <button
-                                  className={selected ? "selected-button" : "add-button"}
-                                  disabled={!selected && !availableForTarget}
-                                  onClick={() => selected ? removeInitiative(initiative.id) : addInitiative(initiative)}
-                                >
-                                  {selected ? "Убрать" : availableForTarget ? "Добавить" : initiative.scope === "city" ? "Выберите город" : "Выберите район"}
-                                </button>
+                                <strong><Icon name="budget" size={17} /> {initiative.cost} <small>ед.</small></strong>
+                                <span className={selected ? "selected-button" : "add-button"}>
+                                  <Icon name={selected ? "remove" : "plus"} size={16} />
+                                  {selected ? "Убрать" : disabledReason || "Добавить"}
+                                </span>
                               </div>
                             </article>
                           );
@@ -676,11 +727,11 @@ export default function App() {
                   <div className="result-score">
                     <p className="section-kicker">Сценарий рассчитан</p>
                     <strong>{result.final_score.toFixed(2)}</strong>
-                    <span>{result.score_delta >= 0 ? "+" : ""}{result.score_delta.toFixed(2)} к baseline</span>
+                    <span>{result.score_delta >= 0 ? "+" : ""}{result.score_delta.toFixed(2)} к исходному значению</span>
                   </div>
                   <div className="result-copy">
                     <h3>
-                      Score изменился на {result.score_delta >= 0 ? "+" : ""}
+                      Индекс изменился на {result.score_delta >= 0 ? "+" : ""}
                       {result.score_delta.toFixed(2)} пункта
                     </h3>
                     <p>
